@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func getRobotsTxt(t *testing.T, fileName string) string {
+func readRobotsTxt(t *testing.T, fileName string) string {
 	content, err := os.ReadFile("testdata/" + fileName)
 	if err != nil {
 		t.Fatalf("Failed to read file: %v", err)
@@ -30,7 +30,7 @@ func TestExtractDavebotDirectives(t *testing.T) {
 }
 
 func TestUrlValidator(t *testing.T) {
-	robotsTxt := getRobotsTxt(t, "robots.txt")
+	robotsTxt := readRobotsTxt(t, "robots.txt")
 
 	validator, _ := ProcessRobotsTxt(robotsTxt)
 
