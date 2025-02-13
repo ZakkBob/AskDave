@@ -6,8 +6,8 @@ package main
 
 import (
 	"fmt"
-	"strconv"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -20,32 +20,32 @@ const (
 )
 
 type url struct {
-	protocol      Protocol  //optional (default Unspecified)
-	subdomain     string    //optional (default none)
-	domain        string    //required
-	tld           string    //required
-	port          int       //optional (default based on protocol)
-	path          []string  //optional (default empty)
-	trailingSlash bool      //optional (default false)
+	protocol      Protocol //optional (default Unspecified)
+	subdomain     string   //optional (default none)
+	domain        string   //required
+	tld           string   //required
+	port          int      //optional (default based on protocol)
+	path          []string //optional (default empty)
+	trailingSlash bool     //optional (default false)
 }
 
 var protocolStringMap = map[Protocol]string{
 	UnspecifiedProtocol: "",
-	HttpProtocol: "http",
-	HttpsProtocol: "https",
+	HttpProtocol:        "http",
+	HttpsProtocol:       "https",
 }
 
 var stringProtocolMap = map[string]Protocol{
-	"": UnspecifiedProtocol,
-	"http": HttpProtocol,
+	"":      UnspecifiedProtocol,
+	"http":  HttpProtocol,
 	"https": HttpsProtocol,
 }
 
-func protocolToString(p Protocol) string{
+func protocolToString(p Protocol) string {
 	return protocolStringMap[p]
 }
 
-func stringToProtocol(s string) Protocol{
+func stringToProtocol(s string) Protocol {
 	return stringProtocolMap[s]
 }
 
@@ -93,7 +93,6 @@ func parseAbsoluteUrl(s string) (url, error) {
 		s = protocolMatches[2] //remove the protocol to simplify future regex (this pattern repeats btw)
 	}
 
-
 	subdomainRegex := regexp.MustCompile("^(.+?)\\.(.*?\\..*)")
 	subdomainMatches := subdomainRegex.FindStringSubmatch(s)
 
@@ -114,7 +113,6 @@ func parseAbsoluteUrl(s string) (url, error) {
 		return parsed, fmt.Errorf("url: '%s' does not contain a domain!", original_s)
 	}
 
-
 	tldRegex := regexp.MustCompile("^(.+?)([/:].*)?$")
 	tldMatches := tldRegex.FindStringSubmatch(s)
 
@@ -126,13 +124,12 @@ func parseAbsoluteUrl(s string) (url, error) {
 		return parsed, fmt.Errorf("url: '%s' does not contain a tld!", original_s)
 	}
 
-
 	portRegex := regexp.MustCompile("^:(.+?)(\\/.*)?$")
 	portMatches := portRegex.FindStringSubmatch(s)
 
 	if len(portMatches) > 2 {
 		port, err := strconv.Atoi(portMatches[1])
-		if err != nil{
+		if err != nil {
 			return parsed, fmt.Errorf("malformed port: '%s' is not a valid port. (%s)", portMatches[1], err.Error())
 		}
 		parsed.port = port
@@ -145,11 +142,11 @@ func parseAbsoluteUrl(s string) (url, error) {
 	if len(pathMatches) > 2 {
 		path := strings.Split(pathMatches[1], "/")
 		parsed.path = path
-		
+
 		s = pathMatches[2]
 	}
 
-	if s == "/"{
+	if s == "/" {
 		parsed.trailingSlash = true
 	}
 
