@@ -1,12 +1,13 @@
-package main
+package robots_test
 
 import (
+	"ZakkBob/AskDave/crawler/robots"
 	"os"
 	"testing"
 )
 
-func getRobotsTxt(t *testing.T, fileName string) string {
-	content, err := os.ReadFile("testdata/" + fileName)
+func readRobotsTxt(t *testing.T, fileName string) string {
+	content, err := os.ReadFile("../testdata/" + fileName)
 	if err != nil {
 		t.Fatalf("Failed to read file: %v", err)
 	}
@@ -21,7 +22,7 @@ func TestExtractDavebotDirectives(t *testing.T) {
 		"bingbot":     "Disallow: /bingbot/",
 	}
 
-	got := extractDavebotDirectives(blocks)
+	got := robots.ExtractDavebotDirectives(blocks)
 	want := "Allow: /Davebot0.1/"
 
 	if got != want {
@@ -30,9 +31,9 @@ func TestExtractDavebotDirectives(t *testing.T) {
 }
 
 func TestUrlValidator(t *testing.T) {
-	robotsTxt := getRobotsTxt(t, "robots.txt")
+	robotsTxt := readRobotsTxt(t, "robots.txt")
 
-	validator, _ := ProcessRobotsTxt(robotsTxt)
+	validator, _ := robots.Parse(robotsTxt)
 
 	testUrls := map[string]bool{
 		"/allowed-dir":                              true,
@@ -49,7 +50,7 @@ func TestUrlValidator(t *testing.T) {
 	}
 
 	for url, want := range testUrls {
-		got := validator.validate(url)
+		got := validator.Validate(url)
 		if got != want {
 			t.Errorf("'%s' got %t, wanted %t", url, got, want)
 		}

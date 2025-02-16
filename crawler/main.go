@@ -1,71 +1,40 @@
 package main
 
 import (
+	"ZakkBob/AskDave/crawler/fetcher"
+	"ZakkBob/AskDave/crawler/tasks"
+	"ZakkBob/AskDave/crawler/url"
 	"fmt"
-	"sync"
+	"strconv"
 	"time"
 )
 
 func main() {
-	start = time.Now()
-
-	var wg sync.WaitGroup
-
-	discoveredUrls.slice = append(discoveredUrls.slice, "https://mateishome.page")
-	uncrawledUrls.slice = append(uncrawledUrls.slice, "https://mateishome.page")
-
-	crawlNextUrl()
-
-	for _ = range 10 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			crawlNextUrl()
-		}()
+	r := tasks.TaskRunner{
+		Fetcher: &fetcher.DummyFetcher{
+			Response:  "Dummy",
+			Delay:     time.Second,
+			RandDelay: time.Second * 2,
+			Debug:     true,
+		},
 	}
 
-	wg.Wait()
+	for i := 0; i < 2; i++ {
+		s := "https://example.com/robots.txt" + strconv.Itoa(i)
 
-	for _ = range 10 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			autoCrawl(10)
-		}()
+		u, _ := url.ParseAbs(s)
+		r.Tasks.Robots.Slice = append(r.Tasks.Robots.Slice, u)
 	}
 
-	wg.Wait()
-
-	//fmt.Println(len(uncrawledUrls.slice), "Uncrawled")
-
-	start = time.Now()
-	for _ = range 1000 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			autoCrawl(10000)
-		}()
+	for i := 0; i < 2; i++ {
+		u, _ := url.ParseAbs(fmt.Sprintf("https://example.com/sitemap%d.xml", i))
+		r.Tasks.Sitemaps.Slice = append(r.Tasks.Sitemaps.Slice, u)
 	}
 
-	//go func() {
-	//	logCrawlStats()
-	//	time.Sleep(100 * time.Millisecond)
-	//}()
-
-	wg.Wait()
-
-	fmt.Println(len(crawledUrls.slice), "Crawled")
-	fmt.Println(len(uncrawledUrls.slice), "Uncrawled")
-
-	for _, pageData := range crawledPages.slice {
-		fmt.Printf("url           - '%s'\n", pageData.url)
-		fmt.Printf("pageTitle     - '%s'\n", pageData.pageTitle)
-		fmt.Printf("ogTitle       - '%s'\n", pageData.ogTitle)
-		fmt.Printf("ogDescription - '%s'\n", pageData.ogDescription)
-		fmt.Printf("ogSiteName    - '%s'\n\n", pageData.ogSiteName)
+	for i := 0; i < 2; i++ {
+		u, _ := url.ParseAbs(fmt.Sprintf("https://example.com/page%d.html", i))
+		r.Tasks.Pages.Slice = append(r.Tasks.Pages.Slice, u)
 	}
 
-	//fmt.Println(crawledPages)
-	fmt.Println(len(crawledUrls.slice), "Crawled")
-	fmt.Println(len(uncrawledUrls.slice), "Uncrawled")
+	r.Run(50)
 }

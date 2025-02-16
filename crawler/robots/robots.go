@@ -2,7 +2,7 @@
 // Processes robots.txt into a struct //
 //------------------------------------//
 
-package main
+package robots
 
 import (
 	"bufio"
@@ -11,15 +11,15 @@ import (
 	"strings"
 )
 
-type urlValidator struct {
-	allowedPatterns    []*regexp.Regexp
-	disallowedPatterns []*regexp.Regexp
+type UrlValidator struct {
+	AllowedPatterns    []*regexp.Regexp `json:"allowed_patterns"`
+	DisallowedPatterns []*regexp.Regexp `json:"disallowed_patterns"`
 }
 
-func (validator *urlValidator) validate(url string) bool {
+func (validator *UrlValidator) Validate(url string) bool {
 	longestMatch := 0
 	isValid := true
-	for _, pattern := range validator.allowedPatterns {
+	for _, pattern := range validator.AllowedPatterns {
 		indices := pattern.FindStringIndex(url)
 		if indices == nil {
 			continue
@@ -30,7 +30,7 @@ func (validator *urlValidator) validate(url string) bool {
 			isValid = true
 		}
 	}
-	for _, pattern := range validator.disallowedPatterns {
+	for _, pattern := range validator.DisallowedPatterns {
 		indices := pattern.FindStringIndex(url)
 		if indices == nil {
 			continue
@@ -110,8 +110,8 @@ func removeComments(s string) string {
 	return noComments
 }
 
-func generateUrlValidator(directives string) urlValidator {
-	validator := urlValidator{make([]*regexp.Regexp, 0), make([]*regexp.Regexp, 0)}
+func generateUrlValidator(directives string) UrlValidator {
+	validator := UrlValidator{make([]*regexp.Regexp, 0), make([]*regexp.Regexp, 0)}
 
 	scanner := bufio.NewScanner(strings.NewReader(directives))
 	directiveRegex := regexp.MustCompile("(?i)(.*?):(.*)")
@@ -137,16 +137,16 @@ func generateUrlValidator(directives string) urlValidator {
 
 		switch name {
 		case "disallow":
-			validator.disallowedPatterns = append(validator.disallowedPatterns, regex)
+			validator.DisallowedPatterns = append(validator.DisallowedPatterns, regex)
 		case "allow":
-			validator.allowedPatterns = append(validator.allowedPatterns, regex)
+			validator.AllowedPatterns = append(validator.AllowedPatterns, regex)
 		}
 	}
 
 	return validator
 }
 
-func ProcessRobotsTxt(content string) (validator urlValidator, sitemapUrl string) {
+func Parse(content string) (validator UrlValidator, sitemapUrl string) {
 	content = removeComments(content)
 	blocks := extractUserAgentBlocks(content)
 	directives := extractDavebotDirectives(blocks)
