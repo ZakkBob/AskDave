@@ -1,12 +1,18 @@
 epic query
 
 WITH ordered_crawls AS (
-    SELECT page.url, page.next_crawl, robots.allowed_patterns, robots.disallowed_patterns,
+    SELECT page.id, page.url, page.next_crawl, robots.allowed_patterns, robots.disallowed_patterns,
     rank() OVER (PARTITION BY site.id ORDER BY page.next_crawl ASC, page.id DESC) as crawl_rank,
     (robots.last_crawl < CURRENT_DATE OR robots.last_crawl IS NULL) AS recrawl_robots
-    FROM page JOIN site on page.site_id = site.id JOIN robots on robots.site_id = site.id  
-    WHERE page.next_crawl <= CURRENT_DATE 
+    FROM page 
+    JOIN site on page.site_id = site.id 
+    JOIN robots on robots.site_id = site.id  
+    WHERE page.next_crawl <= CURRENT_DATE AND page.assigned IS FALSE 
     ORDER BY page.next_crawl ASC, crawl_rank ASC 
-    LIMIT 100
+    LIMIT $1
 )
-SELECT url, allowed_patterns, disallowed_patterns, next_crawl, recrawl_robots FROM ordered_crawls;
+UPDATE page
+SET assigned = TRUE
+FROM ordered_crawls
+WHERE page.id = ordered_crawls.id 
+RETURNING ordered_crawls.url, ordered_crawls.next_crawl, ordered_crawls.recrawl_robots, ordered_crawls.allowed_patterns, ordered_crawls.disallowed_patterns;

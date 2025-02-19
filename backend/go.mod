@@ -4,7 +4,10 @@ go 1.24.0
 
 replace github.com/ZakkBob/AskDave/gocommon => ../gocommon
 
-require github.com/jackc/pgx/v5 v5.7.2
+require (
+	github.com/ZakkBob/AskDave/gocommon v0.0.0
+	github.com/jackc/pgx/v5 v5.7.2
+)
 
 require (
 	github.com/jackc/pgpassfile v1.0.0 // indirect

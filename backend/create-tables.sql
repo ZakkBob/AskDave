@@ -17,7 +17,8 @@ CREATE TABLE page (
   url varchar(2048) NOT NULL,
   next_crawl date,
   crawl_interval int,
-  interval_delta int
+  interval_delta int,
+  assigned bool DEFAULT f NOT NULL
 );
 
 CREATE TYPE failure_reason AS ENUM ('NoFailure', 'RobotsDisallowed', 'FetchFailed');
@@ -49,13 +50,3 @@ CREATE TABLE robots (
   disallowed_patterns varchar(50)[],
   last_crawl date
 );
-
-INSERT INTO
-  site (url)
-VALUES
-  ('https://mateishome.page');
-
-INSERT INTO
-  page (site_id, url, next_crawl, crawl_interval, interval_delta)
-VALUES
-  (1, 'https://mateishome.page', '19-02-2025', 1, 1);
