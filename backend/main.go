@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/ZakkBob/AskDave/gocommon/hash"
+	"github.com/ZakkBob/AskDave/gocommon/page"
 	"github.com/ZakkBob/AskDave/gocommon/robots"
 	"github.com/ZakkBob/AskDave/gocommon/tasks"
 	"github.com/ZakkBob/AskDave/gocommon/url"
@@ -42,6 +43,7 @@ func main() {
 
 	r := tasks.Results{
 		Robots: make(map[string]*tasks.RobotsResult),
+		Pages:  make(map[string]*tasks.PageResult),
 	}
 
 	mateiValidator, _ := robots.Parse(`
@@ -147,6 +149,27 @@ Disallow: /?q=user/logout/`)
 	}
 
 	r.Robots["https://mateishome.page"] = &matei
+
+	u1, _ := url.ParseAbs("https://www.google.com/e")
+	u2, _ := url.ParseAbs("https://mateishome.page/api")
+
+	r.Pages["https://mateishome.page"] = &tasks.PageResult{
+		Url:           &u,
+		Success:       true,
+		FailureReason: tasks.NoFailure,
+		Changed:       true,
+		Page: &page.Page{
+			Url:           u,
+			Title:         "Matei's Epic Home Page",
+			OgTitle:       "",
+			OgDescription: "",
+			OgSiteName:    "",
+			Hash:          hash.Hash{},
+			Links: []url.Url{
+				u1, u2,
+			},
+		},
+	}
 
 	data, err := json.MarshalIndent(r, "", "  ")
 
