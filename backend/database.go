@@ -3,17 +3,58 @@ package main
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"time"
 
+	"github.com/ZakkBob/AskDave/gocommon/robots"
 	"github.com/ZakkBob/AskDave/gocommon/tasks"
 	"github.com/ZakkBob/AskDave/gocommon/url"
 	"github.com/jackc/pgx/v5"
 )
 
+func validatorByUrl(s string) (robots.UrlValidator, error) {
+	query := `SELECT allowed_patterns, disallowed_patterns 
+		FROM robots 
+		JOIN site 
+		ON robots.site_id = site.id 
+		AND site.url = $1;`
+
+	var allowedPatterns []string
+	var disallowedPatterns []string
+
+	row := dbpool.QueryRow(context.Background(), query, s)
+	err := row.Scan(&allowedPatterns, &disallowedPatterns)
+	if err != nil {
+		return robots.UrlValidator{}, fmt.Errorf("unable to get validator for url '%s': %v", s, err)
+	}
+
+	var validator robots.UrlValidator
+
+	for _, allowed := range allowedPatterns {
+		r, err := regexp.Compile(allowed)
+		if err != nil {
+			return robots.UrlValidator{}, fmt.Errorf("unable to parse regex '%s': %v", allowed, err)
+		}
+		validator.AllowedPatterns = append(validator.AllowedPatterns, r)
+	}
+
+	for _, disallowed := range disallowedPatterns {
+		r, err := regexp.Compile(disallowed)
+		if err != nil {
+			return robots.UrlValidator{}, fmt.Errorf("unable to parse regex '%s': %v", disallowed, err)
+		}
+		validator.DisallowedPatterns = append(validator.DisallowedPatterns, r)
+	}
+
+	return validator, nil
+
+}
+
 func saveResults(r *tasks.Results) error {
 	robotsQuery := `UPDATE robots 
 		SET (allowed_patterns, disallowed_patterns, last_crawl) = ($1, $2, CURRENT_DATE) 
-		FROM site WHERE site.url = $3 AND site.id = robots.site_id;`
+		FROM site WHERE site.url = $3 
+		AND site.id = robots.site_id;`
 
 	for urlS, robotsResult := range r.Robots {
 		if !robotsResult.Changed {
@@ -40,7 +81,9 @@ func saveResults(r *tasks.Results) error {
 			if pageResult.Changed {
 				// add crawl
 				query := `INSERT INTO crawl (page_id, datetime, success, content_changed, title, og_title, og_description, hash)
-					SELECT page.id, CURRENT_TIMESTAMP, TRUE, TRUE, $1, $2, $3, $4 FROM page WHERE url = $5;`
+					SELECT page.id, CURRENT_TIMESTAMP, TRUE, TRUE, $1, $2, $3, $4 
+					FROM page 
+					WHERE url = $5;`
 
 				_, err := dbpool.Exec(context.Background(), query, pageResult.Page.Title, pageResult.Page.OgTitle, pageResult.Page.OgDescription, pageResult.Page.Hash, urlS)
 				if err != nil {
@@ -48,8 +91,10 @@ func saveResults(r *tasks.Results) error {
 				}
 
 				// delete existing links
-				query = `DELETE FROM link USING page 
-					WHERE link.src = page.id AND page.url = $1;`
+				query = `DELETE FROM link 
+					USING page 
+					WHERE link.src = page.id 
+					AND page.url = $1;`
 				_, err = dbpool.Exec(context.Background(), query, urlS)
 				if err != nil {
 					return fmt.Errorf("unable to delete links for url '%s': %v", urlS, err)
@@ -58,7 +103,8 @@ func saveResults(r *tasks.Results) error {
 				//add new links
 				query = `INSERT INTO link (src, dst, count) 
 					SELECT page.id, $2, $3 
-					FROM page WHERE page.url=$1;` //src, dst, count
+					FROM page 
+					WHERE page.url=$1;` //src, dst, count
 				for _, dst := range pageResult.Page.Links {
 					_, err := dbpool.Exec(context.Background(), query, urlS, dst.String(), 1)
 					if err != nil {
@@ -67,7 +113,9 @@ func saveResults(r *tasks.Results) error {
 				}
 			} else {
 				query := `INSERT INTO crawl (page_id, datetime, success, content_changed)
-					SELECT page.id, CURRENT_TIMESTAMP, TRUE, FALSE FROM page WHERE url = $1;`
+					SELECT page.id, CURRENT_TIMESTAMP, TRUE, FALSE 
+					FROM page 
+					WHERE url = $1;`
 
 				_, err := dbpool.Exec(context.Background(), query, urlS)
 				if err != nil {
@@ -76,7 +124,9 @@ func saveResults(r *tasks.Results) error {
 			}
 		} else {
 			query := `INSERT INTO crawl (page_id, datetime, success)
-				SELECT page.id, CURRENT_TIMESTAMP, FALSE FROM page WHERE url = $1;`
+				SELECT page.id, CURRENT_TIMESTAMP, FALSE 
+				FROM page 
+				WHERE url = $1;`
 
 			_, err := dbpool.Exec(context.Background(), query, urlS)
 

@@ -174,7 +174,7 @@ Disallow: /?q=user/logout/`)
 	data, err := json.MarshalIndent(r, "", "  ")
 
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Unable to serialise tasks: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Unable to serialise results: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -186,6 +186,20 @@ Disallow: /?q=user/logout/`)
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
+
+	validator, err := validatorByUrl("https://mateishome.page")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Unable to create validator: %v\n", err)
+		os.Exit(1)
+	}
+	data, err = json.MarshalIndent(validator, "", "  ")
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Unable to serialise validator: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println(string(data))
 }
 
 // 1 | https://mateishome.page
