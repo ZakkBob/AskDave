@@ -10,9 +10,19 @@ import (
 	"github.com/ZakkBob/AskDave/gocommon/tasks"
 	"github.com/ZakkBob/AskDave/gocommon/url"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
-func validatorByUrl(s string) (robots.UrlValidator, error) {
+type PgxPoolIface interface {
+	Begin(context.Context) (pgx.Tx, error)
+	Exec(context.Context, string, ...interface{}) (pgconn.CommandTag, error)
+	QueryRow(context.Context, string, ...interface{}) pgx.Row
+	Query(context.Context, string, ...interface{}) (pgx.Rows, error)
+	Ping(context.Context) error
+	Close()
+}
+
+func ValidatorByUrl(dbpool PgxPoolIface, s string) (robots.UrlValidator, error) {
 	query := `SELECT allowed_patterns, disallowed_patterns 
 		FROM robots 
 		JOIN site 
@@ -50,7 +60,7 @@ func validatorByUrl(s string) (robots.UrlValidator, error) {
 
 }
 
-func saveResults(r *tasks.Results) error {
+func SaveResults(dbpool PgxPoolIface, r *tasks.Results) error {
 	robotsQuery := `UPDATE robots 
 		SET (allowed_patterns, disallowed_patterns, last_crawl) = ($1, $2, CURRENT_DATE) 
 		FROM site WHERE site.url = $3 
@@ -164,7 +174,7 @@ func saveResults(r *tasks.Results) error {
 	return nil
 }
 
-func nextTasks(n int) (*tasks.Tasks, error) {
+func NextTasks(dbpool PgxPoolIface, n int) (*tasks.Tasks, error) {
 	query := `WITH ordered_crawls AS (
 		SELECT page.id, page.url, page.next_crawl, robots.allowed_patterns, robots.disallowed_patterns,
 		rank() OVER (PARTITION BY site.id ORDER BY page.next_crawl ASC, page.id DESC) as crawl_rank,

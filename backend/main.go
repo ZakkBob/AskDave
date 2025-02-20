@@ -14,11 +14,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var dbpool *pgxpool.Pool
-
 func main() {
-	var err error
-	dbpool, err = pgxpool.New(context.Background(), "postgres://postgres:password@127.0.0.1:5432/postgres")
+	dbpool, err := pgxpool.New(context.Background(), "postgres://postgres:password@127.0.0.1:5432/postgres")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Unable to connect to database: %v\n", err)
 		os.Exit(1)
@@ -171,7 +168,7 @@ Disallow: /?q=user/logout/`)
 		},
 	}
 
-	data, err := json.MarshalIndent(r, "", "  ")
+	data, err := json.MarshalIndent(&r, "", "  ")
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Unable to serialise results: %v\n", err)
@@ -180,19 +177,19 @@ Disallow: /?q=user/logout/`)
 
 	fmt.Println(string(data))
 
-	err = saveResults(&r)
+	err = SaveResults(dbpool, &r)
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 
-	validator, err := validatorByUrl("https://mateishome.page")
+	validator, err := ValidatorByUrl(dbpool, "https://mateishome.page")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Unable to create validator: %v\n", err)
 		os.Exit(1)
 	}
-	data, err = json.MarshalIndent(validator, "", "  ")
+	data, err = json.MarshalIndent(&validator, "", "  ")
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Unable to serialise validator: %v\n", err)
