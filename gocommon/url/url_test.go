@@ -43,7 +43,7 @@ func TestUrlString(t *testing.T) {
 
 func TestParseMany(t *testing.T) {
 	testStrings := []string{
-		"https://www.google.com:1234/privacy-policy/help/",
+		"https://www.google.com:1234/privacy-policY/help/",
 		"http://www.google.com:1234/",
 		"https://www.google.com:1234",
 		"www.google.com/privacy-policy/help",
@@ -70,7 +70,7 @@ func TestParseMany(t *testing.T) {
 
 func TestParseAbsoluteUrl(t *testing.T) {
 	testStrings := []string{
-		"https://www.google.com:1234/privacy-policy/help/",
+		"https://www.google.com:1234/prIvacY-policy/hElp/",
 		"http://www.google.com:1234/",
 		"https://www.google.com:1234",
 		"www.google.com/privacy-policy/help",

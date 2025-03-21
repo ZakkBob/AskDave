@@ -64,12 +64,6 @@ func TestMain(m *testing.M) {
 		log.Fatalf("Could not connect to docker: %s", err)
 	}
 
-	defer func() {
-		if err := pool.Purge(resource); err != nil {
-			log.Fatalf("Could not purge resource: %s", err)
-		}
-	}()
-
 	data, err := os.ReadFile("./create-tables.sql")
 	if err != nil {
 		fmt.Println("Error reading file:", err)
@@ -81,10 +75,12 @@ func TestMain(m *testing.M) {
 		log.Fatalf("Could not run setup file: %s", err)
 	}
 
+	defer func() {
+		if err := pool.Purge(resource); err != nil {
+			log.Fatalf("Could not purge resource: %s", err)
+		}
+	}()
+
 	// run tests
 	m.Run()
-}
-
-func TestRealbob(t *testing.T) {
-	// all tests
 }

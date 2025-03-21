@@ -50,7 +50,10 @@ func SaveNewPage(p page.Page) (OrmPage, error) {
 		Assigned:      false,
 	}
 
-	s, err := SiteByUrl(p.Url.StringNoPath())
+	var s OrmSite
+	var err error
+
+	s, err = SiteByUrl(p.Url.StringNoPath())
 	if err != nil {
 		return o, fmt.Errorf("unable to save new page '%v': %v", p, err)
 	}
@@ -75,10 +78,24 @@ func SaveNewPage(p page.Page) (OrmPage, error) {
 func (o *OrmPage) updateLinks() error {
 	DeleteLinksBySrc(o.Url.String())
 
-	for _, dst := range o.Links { // Could be optimised if removing the orm
-		p, err := PageByUrl(dst.String())
-		if err == pgx.ErrNoRows {
+	var p OrmPage
+	var err error
 
+	for _, dst := range o.Links { // Could be optimised if removing the orm
+		p, err = PageByUrl(dst.String())
+		if err == pgx.ErrNoRows {
+			p, err = SaveNewPage(page.Page{
+				Url: dst,
+				Title: "",
+				OgTitle:       "",
+				OgDescription: "",
+				OgSiteName:   "",
+				Links:         []url.Url{},
+				Hash:   hash.Hashs(""),
+			})
+			if err != nil {
+				return fmt.Errorf("unable to save link '%v': %v", o, err)
+			}
 		}
 		if err != nil {
 			return fmt.Errorf("unable to save link '%v': %v", o, err)
@@ -97,9 +114,9 @@ func (o *OrmPage) Save(updateLinks bool) error {
 
 	query := `UPDATE page
 		SET site = $2, path = $3, title = $4, og_title = $5, og_description = $6, og_sitename = $7, next_crawl = $8, crawl_interval = $9, interval_delta = $10, assigned = $11, hash = $12
-		WHERE link.id = $1;`
+		WHERE page.id = $1;`
 
-	_, err = dbpool.Exec(context.Background(), query, o.id, s.id, o.Url.PathString(), o.Title, o.OgDescription, o.OgSiteName, o.NextCrawl, o.CrawlInterval, o.IntervalDelta, o.Assigned, o.Hash.String())
+	_, err = dbpool.Exec(context.Background(), query, o.id, s.id, o.Url.PathString(), o.Title, o.OgTitle, o.OgDescription, o.OgSiteName, o.NextCrawl, o.CrawlInterval, o.IntervalDelta, o.Assigned, o.Hash.String())
 	if err != nil {
 		return fmt.Errorf("unable to save page '%v': %v", o, err)
 	}
@@ -107,7 +124,7 @@ func (o *OrmPage) Save(updateLinks bool) error {
 	if updateLinks {
 		err = o.updateLinks()
 		if err != nil {
-			return fmt.Errorf("unable to save page '%v': %v", o, err)
+			return fmt.Errorf("unable to save page links '%v': %v", o, err)
 		}
 	}
 

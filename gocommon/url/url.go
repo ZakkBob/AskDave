@@ -184,32 +184,32 @@ func ParseAbs(s string) (Url, error) {
 		s = protocolMatches[2] //remove the protocol to simplify future regex (this pattern repeats btw)
 	}
 
-	subdomainRegex := regexp.MustCompile(`^([a-z0-9-]+?)\.([a-z0-9-]*?\..*)`)
+	subdomainRegex := regexp.MustCompile(`^([a-zA-z0-9-]+?)\.([a-zA-z0-9-]*?\..*)`)
 	subdomainMatches := subdomainRegex.FindStringSubmatch(s)
 
 	if len(subdomainMatches) > 2 {
 		subdomain := subdomainMatches[1]
-		parsed.Subdomain = subdomain
+		parsed.Subdomain = strings.ToLower(subdomain)
 		s = subdomainMatches[2] //see what i mean
 	}
 
-	domainRegex := regexp.MustCompile(`^([a-z0-9-]+?)\.(.*)`)
+	domainRegex := regexp.MustCompile(`^([a-zA-z0-9-]+?)\.(.*)`)
 	domainMatches := domainRegex.FindStringSubmatch(s)
 
 	if len(domainMatches) > 2 {
 		domain := domainMatches[1]
-		parsed.Domain = domain
+		parsed.Domain = strings.ToLower(domain)
 		s = domainMatches[2]
 	} else {
 		return parsed, fmt.Errorf("url: '%s' does not contain a domain", original_s)
 	}
 
-	tldRegex := regexp.MustCompile(`^([a-z0-9-]+?)([/:].*)?$`)
+	tldRegex := regexp.MustCompile(`^([a-zA-z0-9-]+?)([/:].*)?$`)
 	tldMatches := tldRegex.FindStringSubmatch(s)
 
 	if len(tldMatches) > 2 {
 		tld := tldMatches[1]
-		parsed.Tld = tld
+		parsed.Tld = strings.ToLower(tld)
 		s = tldMatches[2]
 	} else {
 		return parsed, fmt.Errorf("url: '%s' does not contain a tld", original_s)
