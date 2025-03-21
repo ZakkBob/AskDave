@@ -151,7 +151,7 @@ func removeComments(s string) string {
 	scanner := bufio.NewScanner(strings.NewReader(s))
 
 	if err := scanner.Err(); err != nil {
-		fmt.Printf("error occurred: %w\n", err)
+		fmt.Printf("error occurred: %v\n", err)
 	}
 
 	for scanner.Scan() {
@@ -168,7 +168,7 @@ func generateUrlValidator(directives string) UrlValidator {
 	directiveRegex := regexp.MustCompile("(?i)(.*?):(.*)")
 
 	if err := scanner.Err(); err != nil {
-		fmt.Printf("error occurred: %w\n", err)
+		fmt.Printf("error occurred: %v\n", err)
 	}
 
 	for scanner.Scan() {
