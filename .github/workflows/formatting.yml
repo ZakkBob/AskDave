@@ -42,7 +42,7 @@ jobs:
         run: go fmt ./...
 
       - name: Commit and push changes
-        uses: EndBug/add-and-commit@7e6142f95833a1ed8a1cd89f2469d1d6d6f95dc8
+        uses: EndBug/add-and-commit@5442017c908921e9bee9dfca7978ca6901143bf0
         with:
           default_author: github_actions
           message: 'chore: fix formatting'
