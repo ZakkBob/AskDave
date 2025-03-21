@@ -1,7 +1,6 @@
 package orm_test
 
 import (
-	"assert"
 	"testing"
 
 	"github.com/ZakkBob/AskDave/backend/orm"
@@ -41,7 +40,7 @@ import (
 // 	if err := mock.ExpectationsWereMet(); err != nil {
 // 		t.Errorf("there were unfulfilled expectations: %s", err)
 // 	}
-}
+// }
 
 func TestSaveResultsRobots(t *testing.T) {
 	mock, err := pgxmock.NewPool()
