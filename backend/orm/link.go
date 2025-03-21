@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/ZakkBob/AskDave/gocommon/url"
-	log "github.com/sirupsen/logrus"
 )
 
 type OrmLink struct {
@@ -24,14 +23,10 @@ func SaveNewLink(src OrmPage, dst OrmPage) (OrmLink, error) {
 
 	row := dbpool.QueryRow(context.Background(), query, src.id, dst.id)
 
-	log.Println(src.Url.String() + ", " + dst.Url.String())
-
 	err := row.Scan(&l.id)
 	if err != nil {
 		return l, fmt.Errorf("unable to save new link with src '%s', dst '%s': %w", src.Url.String(), dst.Url.String(), err)
 	}
-
-	log.Println(src.Url.String() + ", " + dst.Url.String() + "2")
 
 	l.Src = src.Url
 	l.Dst = dst.Url
@@ -158,10 +153,7 @@ func LinkDstsBySrc(src string) ([]url.Url, error) {
 		return []url.Url{}, fmt.Errorf("unable to get destinations from database for src '%s': %w", src, err)
 	}
 
-	log.Println("dsts lol: " + src)
-
 	for rows.Next() {
-		log.Println("eee")
 		err := rows.Scan(&pageId)
 
 		if err != nil {
@@ -175,7 +167,7 @@ func LinkDstsBySrc(src string) ([]url.Url, error) {
 		}
 
 		urls = append(urls, page.Url)
-		log.Println(page.Url.String())
+
 	}
 
 	return urls, nil

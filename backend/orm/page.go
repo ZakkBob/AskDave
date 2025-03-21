@@ -12,7 +12,6 @@ import (
 	"github.com/ZakkBob/AskDave/gocommon/tasks"
 	"github.com/ZakkBob/AskDave/gocommon/url"
 	"github.com/jackc/pgx/v5"
-	log "github.com/sirupsen/logrus"
 )
 
 type OrmPage struct {
@@ -79,7 +78,6 @@ func SaveNewPage(p page.Page) (OrmPage, error) {
 
 func (o *OrmPage) updateLinks() error {
 	DeleteLinksBySrc(o.Url.String())
-	log.Println("deleted all links")
 
 	var p OrmPage
 	var err error
@@ -105,7 +103,6 @@ func (o *OrmPage) updateLinks() error {
 		}
 
 		SaveNewLink(*o, p)
-		log.Println("saved new link from " + o.Url.String() + "  " + p.Url.String())
 	}
 	return nil
 }
