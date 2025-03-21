@@ -41,6 +41,33 @@ func TestUrlString(t *testing.T) {
 	}
 }
 
+func TestParseMany(t *testing.T) {
+	testStrings := []string{
+		"https://www.google.com:1234/privacy-policy/help/",
+		"http://www.google.com:1234/",
+		"https://www.google.com:1234",
+		"www.google.com/privacy-policy/help",
+		"google.com/privacy-policy/help",
+		"http://google.com/privacy-policy/",
+		"https://example.com/robots.txt",
+	}
+
+	urls, err := url.ParseMany(testStrings)
+
+	if err != nil {
+		t.Error(err.Error())
+	}
+
+	for i, u := range urls {
+		expected := testStrings[i]
+
+		got := u.String()
+		if got != expected {
+			t.Errorf("got '%s', expected '%s'", got, expected)
+		}
+	}
+}
+
 func TestParseAbsoluteUrl(t *testing.T) {
 	testStrings := []string{
 		"https://www.google.com:1234/privacy-policy/help/",

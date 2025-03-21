@@ -110,6 +110,22 @@ func (u *Url) Copy(dst *Url) {
 	copy(dst.Path, u.Path)
 }
 
+func (u *Url) StringNoPath() string {
+	s := ""
+
+	if u.Protocol != UnspecifiedProtocol {
+		s += protocolToString(u.Protocol) + "://"
+	}
+
+	s += u.FQDN()
+
+	if (u.Port != 0) && !(u.Protocol == HttpProtocol && u.Port == 80) && !(u.Protocol == HttpsProtocol && u.Port == 443) {
+		s += ":" + strconv.Itoa(u.Port)
+	}
+
+	return s
+}
+
 func (u *Url) String() string {
 	s := ""
 
@@ -137,6 +153,20 @@ func (u *Url) String() string {
 	}
 
 	return s
+}
+
+func ParseMany(s []string) ([]Url, error) {
+	urls := make([]Url, 0)
+	var u Url
+	var err error
+	for _, urlS := range s {
+		u, err = ParseAbs(urlS)
+		if err != nil {
+			return nil, err
+		}
+		urls = append(urls, u)
+	}
+	return urls, nil
 }
 
 func ParseAbs(s string) (Url, error) {
