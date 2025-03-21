@@ -1,7 +1,6 @@
 package orm_test
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/ZakkBob/AskDave/backend/orm"
@@ -32,8 +31,6 @@ func TestSaveNewLink(t *testing.T) {
 		Hash:          hash.Hashs(""),
 	}
 
-	fmt.Println(1)
-
 	ormP1, err := orm.SaveNewPage(p)
 	if err != nil {
 		t.Errorf("didn't expect an error: %v", err)
@@ -41,30 +38,20 @@ func TestSaveNewLink(t *testing.T) {
 
 	p.Url = u2
 
-	fmt.Println(2)
-
 	ormP2, err := orm.SaveNewPage(p)
 	if err != nil {
 		t.Errorf("didn't expect an error: %v", err)
 	}
-
-	fmt.Println(3)
 
 	_, err = orm.SaveNewLink(ormP1, ormP2)
 	if err != nil {
 		t.Errorf("didn't expect an error: %v", err)
 	}
 
-	fmt.Println(4)
-
 	links, err := orm.LinkDstsBySrc(u1.String())
 	if err != nil {
 		t.Errorf("didn't expect an error: %v", err)
 	}
 
-	fmt.Println(5)
-
 	assert.Equal(t, []url.Url{u2}, links)
-
-	fmt.Println(6)
 }
