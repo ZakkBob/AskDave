@@ -52,7 +52,7 @@ func (r *Results) CheckRobots(u url.Url) (bool, error) {
 	robotsUrl.TrailingSlash = false //normalise the url
 
 	if err != nil {
-		return false, fmt.Errorf("checking robots: %v", err)
+		return false, fmt.Errorf("checking robots: %w", err)
 	}
 
 	r.robotMu.RLock()

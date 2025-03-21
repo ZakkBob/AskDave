@@ -26,15 +26,15 @@ func (c *OrmCrawl) Save() error {
 		SET page = $2, datetime = $3, success = $4, failure_reason = $5, content_changed = $6, hash = $7
 		WHERE link.id = $1;`
 
-	p, err := PageByUrl(c.Url.String())
+	p, err := PageByUrl(c.Url.String(), false)
 
 	if err != nil {
-		return fmt.Errorf("unable to save crawl '%v': %v", c, err)
+		return fmt.Errorf("unable to save crawl '%v': %w", c, err)
 	}
 
 	_, err = dbpool.Exec(context.Background(), query, c.id, p.id, c.Datetime, c.Success, c.FailureReason, c.ContentChanged, c.Hash)
 	if err != nil {
-		return fmt.Errorf("unable to save crawl '%v': %v", c, err)
+		return fmt.Errorf("unable to save crawl '%v': %w", c, err)
 	}
 
 	return nil

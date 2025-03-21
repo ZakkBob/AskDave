@@ -22,7 +22,7 @@ func SaveNewSite(urlS string) (OrmSite, error) {
 	u, err := url.ParseAbs(urlS)
 
 	if err != nil {
-		return OrmSite{}, fmt.Errorf("unable to save new site with url '%s': %v", urlS, err)
+		return OrmSite{}, fmt.Errorf("unable to save new site with url '%s': %w", urlS, err)
 	}
 
 	o = OrmSite{
@@ -38,7 +38,7 @@ func SaveNewSite(urlS string) (OrmSite, error) {
 	err = row.Scan(&o.id)
 
 	if err != nil {
-		return o, fmt.Errorf("unable to save new site with url '%s': %v", urlS, err)
+		return o, fmt.Errorf("unable to save new site with url '%s': %w", urlS, err)
 	}
 
 	return o, nil
@@ -51,7 +51,7 @@ func (o *OrmSite) Save() error {
 
 	_, err := dbpool.Exec(context.Background(), query, o.id, o.Url)
 	if err != nil {
-		return fmt.Errorf("unable to save site with id '%d': %v", o.id, err)
+		return fmt.Errorf("unable to save site with id '%d': %w", o.id, err)
 	}
 
 	return nil
@@ -69,13 +69,13 @@ func SiteByID(id int) (OrmSite, error) {
 	err := row.Scan(&s.id, &urlS)
 
 	if err != nil {
-		return s, fmt.Errorf("unable to get site from database for id '%d': %v", id, err)
+		return s, fmt.Errorf("unable to get site from database for id '%d': %w", id, err)
 	}
 
 	u, err := url.ParseAbs(urlS)
 
 	if err != nil {
-		return OrmSite{}, fmt.Errorf("unable to get site from database for id '%d': %v", id, err)
+		return OrmSite{}, fmt.Errorf("unable to get site from database for id '%d': %w", id, err)
 	}
 
 	s.Url = u
@@ -93,13 +93,13 @@ func SiteByUrl(urlS string) (OrmSite, error) {
 	err := row.Scan(&s.id)
 
 	if err != nil {
-		return s, fmt.Errorf("unable to get site from database for url '%s': %v", urlS, err)
+		return s, fmt.Errorf("unable to get site from database for url '%s': %w", urlS, err)
 	}
 
 	u, err := url.ParseAbs(urlS)
 
 	if err != nil {
-		return OrmSite{}, fmt.Errorf("unable to get site from database for url '%s': %v", urlS, err)
+		return OrmSite{}, fmt.Errorf("unable to get site from database for url '%s': %w", urlS, err)
 	}
 
 	s.Url = u

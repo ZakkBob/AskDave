@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"errors"
 	"fmt"
 
 	"github.com/ZakkBob/AskDave/gocommon/hash"
@@ -11,6 +12,7 @@ import (
 	"github.com/ZakkBob/AskDave/gocommon/tasks"
 	"github.com/ZakkBob/AskDave/gocommon/url"
 	"github.com/jackc/pgx/v5"
+	log "github.com/sirupsen/logrus"
 )
 
 type OrmPage struct {
@@ -29,7 +31,7 @@ func (o *OrmPage) SaveCrawl(datetime time.Time, success bool, failureReason task
 
 	_, err := dbpool.Exec(context.Background(), query, o.id, datetime, success, failureReason, contentChanged, hash.String())
 	if err != nil {
-		return fmt.Errorf("unable to save crawl '%v' '%v' '%v' '%v' '%v': %v", datetime, success, failureReason, contentChanged, hash, err)
+		return fmt.Errorf("unable to save crawl '%v' '%v' '%v' '%v' '%v': %w", datetime, success, failureReason, contentChanged, hash, err)
 	}
 
 	return nil
@@ -53,9 +55,9 @@ func SaveNewPage(p page.Page) (OrmPage, error) {
 	var s OrmSite
 	var err error
 
-	s, err = SiteByUrl(p.Url.StringNoPath())
+	s, err = SaveNewSite(p.Url.StringNoPath())
 	if err != nil {
-		return o, fmt.Errorf("unable to save new page '%v': %v", p, err)
+		return o, fmt.Errorf("unable to save new page '%v': %w", p, err)
 	}
 
 	row := dbpool.QueryRow(context.Background(), query, s.id, o.Url.PathString(), o.Title, o.OgTitle, o.OgDescription, o.OgSiteName, o.NextCrawl, o.CrawlInterval, o.IntervalDelta, o.Assigned, o.Hash.String())
@@ -63,13 +65,13 @@ func SaveNewPage(p page.Page) (OrmPage, error) {
 	err = row.Scan(&o.id)
 
 	if err != nil {
-		return o, fmt.Errorf("unable to save new page '%v': %v", p, err)
+		return o, fmt.Errorf("unable to save new page '%v': %w", p, err)
 	}
 
 	err = o.updateLinks()
 
 	if err != nil {
-		return o, fmt.Errorf("unable to save new page '%v': %v", o, err)
+		return o, fmt.Errorf("unable to save new page '%v': %w", o, err)
 	}
 
 	return o, nil
@@ -77,39 +79,41 @@ func SaveNewPage(p page.Page) (OrmPage, error) {
 
 func (o *OrmPage) updateLinks() error {
 	DeleteLinksBySrc(o.Url.String())
+	log.Println("deleted all links")
 
 	var p OrmPage
 	var err error
 
 	for _, dst := range o.Links { // Could be optimised if removing the orm
-		p, err = PageByUrl(dst.String())
-		if err == pgx.ErrNoRows {
+		p, err = PageByUrl(dst.String(), true)
+		if errors.Is(err, pgx.ErrNoRows) {
 			p, err = SaveNewPage(page.Page{
-				Url: dst,
-				Title: "",
+				Url:           dst,
+				Title:         "",
 				OgTitle:       "",
 				OgDescription: "",
-				OgSiteName:   "",
+				OgSiteName:    "",
 				Links:         []url.Url{},
-				Hash:   hash.Hashs(""),
+				Hash:          hash.Hashs(""),
 			})
 			if err != nil {
-				return fmt.Errorf("unable to save link '%v': %v", o, err)
+				return fmt.Errorf("unable to update links (saving page) '%v': %w", o, err)
 			}
 		}
 		if err != nil {
-			return fmt.Errorf("unable to save link '%v': %v", o, err)
+			return fmt.Errorf("unable to update links '%v': %w", o, err)
 		}
 
 		SaveNewLink(*o, p)
+		log.Println("saved new link from " + o.Url.String() + "  " + p.Url.String())
 	}
 	return nil
 }
 
 func (o *OrmPage) Save(updateLinks bool) error {
-	s, err := SiteByUrl(o.Url.FQDN())
+	s, err := SaveNewSite(o.Url.FQDN())
 	if err != nil {
-		return fmt.Errorf("unable to save page '%v': %v", o, err)
+		return fmt.Errorf("unable to save page '%v': %w", o, err)
 	}
 
 	query := `UPDATE page
@@ -118,20 +122,20 @@ func (o *OrmPage) Save(updateLinks bool) error {
 
 	_, err = dbpool.Exec(context.Background(), query, o.id, s.id, o.Url.PathString(), o.Title, o.OgTitle, o.OgDescription, o.OgSiteName, o.NextCrawl, o.CrawlInterval, o.IntervalDelta, o.Assigned, o.Hash.String())
 	if err != nil {
-		return fmt.Errorf("unable to save page '%v': %v", o, err)
+		return fmt.Errorf("unable to save page '%v': %w", o, err)
 	}
 
 	if updateLinks {
 		err = o.updateLinks()
 		if err != nil {
-			return fmt.Errorf("unable to save page links '%v': %v", o, err)
+			return fmt.Errorf("unable to save page links '%v': %w", o, err)
 		}
 	}
 
 	return nil
 }
 
-func pageFromRow(row pgx.Row) (OrmPage, error) {
+func pageFromRow(row pgx.Row, loadLinks bool) (OrmPage, error) {
 	var p OrmPage
 	var siteId int
 	var path string
@@ -156,7 +160,7 @@ func pageFromRow(row pgx.Row) (OrmPage, error) {
 		return p, err
 	}
 
-	u, err := url.ParseRel(path, site.Url)
+	u, err := url.ParseAbs(site.Url.String() + path)
 
 	if err != nil {
 		return p, err
@@ -164,52 +168,53 @@ func pageFromRow(row pgx.Row) (OrmPage, error) {
 
 	p.Url = u
 
-	// Get Links
-	dsts, err := LinkDstsBySrc(p.Url.String())
-	if err != nil {
-		return p, err
+	if loadLinks {
+		// Get Links
+		dsts, err := LinkDstsBySrc(p.Url.String())
+		if err != nil {
+			return p, err
+		}
+		p.Links = dsts
 	}
-	p.Links = dsts
-
 	return p, nil
 }
 
-func PageByID(id int) (OrmPage, error) {
+func PageByID(id int, loadLinks bool) (OrmPage, error) {
 	query := `SELECT id, site, path, title, og_title, og_description, og_sitename, next_crawl, crawl_interval, interval_delta, assigned, hash
 		FROM page
 		WHERE page.id = $1;`
 
 	row := dbpool.QueryRow(context.Background(), query, id)
-	p, err := pageFromRow(row)
+	p, err := pageFromRow(row, loadLinks)
 
 	if err != nil {
-		return p, fmt.Errorf("unable to get page from database for id '%d': %v", id, err)
+		return p, fmt.Errorf("unable to get page from database for id '%d': %w", id, err)
 	}
 
 	return p, nil
 
 }
 
-func PageByUrl(urlS string) (OrmPage, error) {
+func PageByUrl(urlS string, loadLinks bool) (OrmPage, error) {
 	query := `SELECT id, site, path, title, og_title, og_description, og_sitename, next_crawl, crawl_interval, interval_delta, assigned, hash
 		FROM page
 		WHERE page.site = $1 AND page.path = $2;`
 
 	u, err := url.ParseAbs(urlS)
 	if err != nil {
-		return OrmPage{}, fmt.Errorf("unable to get page from database for url '%s': %v", urlS, err)
+		return OrmPage{}, fmt.Errorf("unable to get page from database for url '%s': %w", urlS, err)
 	}
 
 	s, err := SiteByUrl(u.StringNoPath())
 	if err != nil {
-		return OrmPage{}, fmt.Errorf("unable to get page from database for url '%s': %v", urlS, err)
+		return OrmPage{}, fmt.Errorf("unable to get page from database for url '%s': %w", urlS, err)
 	}
 
 	row := dbpool.QueryRow(context.Background(), query, s.id, u.PathString())
-	p, err := pageFromRow(row)
+	p, err := pageFromRow(row, loadLinks)
 
 	if err != nil {
-		return p, fmt.Errorf("unable to get page from database for url '%s': %v", urlS, err)
+		return p, fmt.Errorf("unable to get page from database for url '%s': %w", urlS, err)
 	}
 
 	return p, nil

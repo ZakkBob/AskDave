@@ -26,7 +26,7 @@ func SaveResults(r *tasks.Results) error {
 
 		_, err := dbpool.Exec(context.Background(), robotsQuery, robotsResult.Validator.AllowedStrings(), robotsResult.Validator.DisallowedStrings(), urlS)
 		if err != nil {
-			return fmt.Errorf("unable to save robots result: %v", err)
+			return fmt.Errorf("unable to save robots result: %w", err)
 		}
 	}
 
@@ -34,9 +34,9 @@ func SaveResults(r *tasks.Results) error {
 	const minCrawlInterval = 7
 
 	for urlS, pageResult := range r.Pages {
-		p, err := PageByUrl(urlS)
+		p, err := PageByUrl(urlS, true)
 		if err != nil {
-			return fmt.Errorf("unable to save page result: %v", err)
+			return fmt.Errorf("unable to save page result: %w", err)
 		}
 
 		if pageResult.Changed {
@@ -68,12 +68,12 @@ func SaveResults(r *tasks.Results) error {
 
 			err = p.Save(false)
 			if err != nil {
-				return fmt.Errorf("unable to save page result: %v", err)
+				return fmt.Errorf("unable to save page result: %w", err)
 			}
 		}
 		err = p.SaveCrawl(time.Now(), pageResult.Success, pageResult.FailureReason, pageResult.Changed, pageResult.Page.Hash)
 		if err != nil {
-			return fmt.Errorf("unable to save page result: %v", err)
+			return fmt.Errorf("unable to save page result: %w", err)
 		}
 	}
 

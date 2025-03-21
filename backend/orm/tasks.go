@@ -32,7 +32,7 @@ func NextTasks(n int) (*tasks.Tasks, error) {
 
 	rows, err := dbpool.Query(context.Background(), query, n)
 	if err != nil {
-		return nil, fmt.Errorf("unable to get next %d tasks: %v", n, err)
+		return nil, fmt.Errorf("unable to get next %d tasks: %w", n, err)
 	}
 	defer rows.Close()
 
@@ -46,7 +46,7 @@ func NextTasks(n int) (*tasks.Tasks, error) {
 		u, err := url.ParseAbs(urlS)
 
 		if err != nil {
-			return fmt.Errorf("looping rows: %v", err)
+			return fmt.Errorf("looping rows: %w", err)
 		}
 
 		if recrawl_robots {
@@ -58,7 +58,7 @@ func NextTasks(n int) (*tasks.Tasks, error) {
 	})
 
 	if err != nil {
-		return nil, fmt.Errorf("unable to get next %d tasks: %v", n, err)
+		return nil, fmt.Errorf("unable to get next %d tasks: %w", n, err)
 	}
 
 	return &t, nil

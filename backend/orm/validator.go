@@ -21,7 +21,7 @@ func ValidatorByUrl(s string) (robots.UrlValidator, error) {
 	row := dbpool.QueryRow(context.Background(), query, s)
 	err := row.Scan(&allowedPatterns, &disallowedPatterns)
 	if err != nil {
-		return robots.UrlValidator{}, fmt.Errorf("unable to get validator for url '%s': %v", s, err)
+		return robots.UrlValidator{}, fmt.Errorf("unable to get validator for url '%s': %w", s, err)
 	}
 
 	var validator robots.UrlValidator
@@ -29,7 +29,7 @@ func ValidatorByUrl(s string) (robots.UrlValidator, error) {
 	for _, allowed := range allowedPatterns {
 		r, err := regexp.Compile(allowed)
 		if err != nil {
-			return robots.UrlValidator{}, fmt.Errorf("unable to parse regex '%s': %v", allowed, err)
+			return robots.UrlValidator{}, fmt.Errorf("unable to parse regex '%s': %w", allowed, err)
 		}
 		validator.AllowedPatterns = append(validator.AllowedPatterns, r)
 	}
@@ -37,7 +37,7 @@ func ValidatorByUrl(s string) (robots.UrlValidator, error) {
 	for _, disallowed := range disallowedPatterns {
 		r, err := regexp.Compile(disallowed)
 		if err != nil {
-			return robots.UrlValidator{}, fmt.Errorf("unable to parse regex '%s': %v", disallowed, err)
+			return robots.UrlValidator{}, fmt.Errorf("unable to parse regex '%s': %w", disallowed, err)
 		}
 		validator.DisallowedPatterns = append(validator.DisallowedPatterns, r)
 	}

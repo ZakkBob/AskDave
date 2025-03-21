@@ -98,7 +98,7 @@ func (r *TaskRunner) crawlNextPage() bool {
 	robotsAllowed, err := r.Results.CheckRobots(u)
 
 	if err != nil {
-		fmt.Printf("error: crawling next robots: %v\n", err)
+		fmt.Printf("error: crawling next robots: %w\n", err)
 		return true
 	}
 

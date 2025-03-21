@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/ZakkBob/AskDave/gocommon/url"
+	log "github.com/sirupsen/logrus"
 )
 
 type OrmLink struct {
@@ -23,10 +24,14 @@ func SaveNewLink(src OrmPage, dst OrmPage) (OrmLink, error) {
 
 	row := dbpool.QueryRow(context.Background(), query, src.id, dst.id)
 
+	log.Println(src.Url.String() + ", " + dst.Url.String())
+
 	err := row.Scan(&l.id)
 	if err != nil {
-		return l, fmt.Errorf("unable to save new link with src '%s', dst '%s': %v", src.Url.String(), dst.Url.String(), err)
+		return l, fmt.Errorf("unable to save new link with src '%s', dst '%s': %w", src.Url.String(), dst.Url.String(), err)
 	}
+
+	log.Println(src.Url.String() + ", " + dst.Url.String() + "2")
 
 	l.Src = src.Url
 	l.Dst = dst.Url
@@ -39,21 +44,21 @@ func (l *OrmLink) Save() error {
 		SET src = $2, dst = $3
 		WHERE link.id = $1;`
 
-	srcPage, err := PageByUrl(l.Src.String())
+	srcPage, err := PageByUrl(l.Src.String(), false)
 
 	if err != nil {
-		return fmt.Errorf("unable to save link '%v': %v", l, err)
+		return fmt.Errorf("unable to save link '%v': %w", l, err)
 	}
 
-	dstPage, err := PageByUrl(l.Src.String())
+	dstPage, err := PageByUrl(l.Src.String(), false)
 
 	if err != nil {
-		return fmt.Errorf("unable to save link '%v': %v", l, err)
+		return fmt.Errorf("unable to save link '%v': %w", l, err)
 	}
 
 	_, err = dbpool.Exec(context.Background(), query, l.id, srcPage.id, dstPage.id)
 	if err != nil {
-		return fmt.Errorf("unable to save link '%v': %v", l, err)
+		return fmt.Errorf("unable to save link '%v': %w", l, err)
 	}
 
 	return nil
@@ -74,13 +79,13 @@ func linkFromRow(row scanInterface) (OrmLink, error) {
 		return OrmLink{}, fmt.Errorf("%v", err)
 	}
 
-	srcPage, err := PageByID(srcId)
+	srcPage, err := PageByID(srcId, false)
 
 	if err != nil {
 		return OrmLink{}, fmt.Errorf("%v", err)
 	}
 
-	dstPage, err := PageByID(dstId)
+	dstPage, err := PageByID(dstId, false)
 
 	if err != nil {
 		return OrmLink{}, fmt.Errorf("%v", err)
@@ -102,7 +107,7 @@ func LinkByID(id int) (OrmLink, error) {
 	row := dbpool.QueryRow(context.Background(), query, id)
 	l, err := linkFromRow(row)
 	if err != nil {
-		return OrmLink{}, fmt.Errorf("unable to get link from database for id '%d': %v", id, err)
+		return OrmLink{}, fmt.Errorf("unable to get link from database for id '%d': %w", id, err)
 	}
 
 	return l, nil
@@ -118,13 +123,13 @@ func LinksBySrc(src string) ([]OrmLink, error) {
 	rows, err := dbpool.Query(context.Background(), query, src)
 
 	if err != nil {
-		return []OrmLink{}, fmt.Errorf("unable to get links from database for src '%s': %v", src, err)
+		return []OrmLink{}, fmt.Errorf("unable to get links from database for src '%s': %w", src, err)
 	}
 
 	for rows.Next() {
 		l, err := linkFromRow(rows)
 		if err != nil {
-			return []OrmLink{}, fmt.Errorf("unable to get links from database for src '%s': %v", src, err)
+			return []OrmLink{}, fmt.Errorf("unable to get links from database for src '%s': %w", src, err)
 		}
 
 		links = append(links, l)
@@ -134,48 +139,58 @@ func LinksBySrc(src string) ([]OrmLink, error) {
 }
 
 func LinkDstsBySrc(src string) ([]url.Url, error) {
-	var urlS string
+	var pageId int
 	urls := make([]url.Url, 0)
+
+	page, err := PageByUrl(src, false)
+	if err != nil {
+		return []url.Url{}, fmt.Errorf("unable to get destinations from database for src '%s': %w", src, err)
+	}
 
 	query := `SELECT dst
 		FROM link
-		WHERE link.src = $1;`
+		WHERE src = $1;`
 
-	rows, err := dbpool.Query(context.Background(), query, src)
+	rows, err := dbpool.Query(context.Background(), query, page.id)
+	defer rows.Close()
 
 	if err != nil {
-		return []url.Url{}, fmt.Errorf("unable to get destinations from database for src '%s': %v", src, err)
+		return []url.Url{}, fmt.Errorf("unable to get destinations from database for src '%s': %w", src, err)
 	}
 
+	log.Println("dsts lol: " + src)
+
 	for rows.Next() {
-		err := rows.Scan(&urlS)
+		log.Println("eee")
+		err := rows.Scan(&pageId)
 
 		if err != nil {
-			return []url.Url{}, fmt.Errorf("unable to get destinations from database for src '%s': %v", src, err)
+			return []url.Url{}, fmt.Errorf("unable to get destinations from database for src '%s': %w", src, err)
 		}
 
-		u, err := url.ParseAbs(urlS)
+		page, err := PageByID(pageId, false)
 
 		if err != nil {
-			return []url.Url{}, fmt.Errorf("unable to get destinations from database for src '%s': %v", src, err)
+			return []url.Url{}, fmt.Errorf("unable to get destinations from database for src '%s': %w", src, err)
 		}
 
-		urls = append(urls, u)
+		urls = append(urls, page.Url)
+		log.Println(page.Url.String())
 	}
 
 	return urls, nil
 }
 
 func DeleteLinksBySrc(src string) error {
-	query := `DELETE
-		FROM link
-		WHERE link.src = $1;`
+	// query := `DELETE
+	// 	FROM link
+	// 	WHERE link.src = $1;`
 
-	_, err := dbpool.Exec(context.Background(), query)
+	// _, err := dbpool.Exec(context.Background(), query)
 
-	if err != nil {
-		return fmt.Errorf("unable to get destinations from database for src '%s': %v", src, err)
-	}
+	// if err != nil {
+	// 	return fmt.Errorf("unable to get destinations from database for src '%s': %w", src, err)
+	// }
 
 	return nil
 }
