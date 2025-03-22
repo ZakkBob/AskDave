@@ -174,15 +174,15 @@ func LinkDstsBySrc(src string) ([]url.Url, error) {
 }
 
 func DeleteLinksBySrc(src string) error {
-	// query := `DELETE
-	// 	FROM link
-	// 	WHERE link.src = $1;`
+	query := `DELETE
+		FROM link
+		WHERE link.src = $1;`
 
-	// _, err := dbpool.Exec(context.Background(), query)
+	_, err := dbpool.Exec(context.Background(), query)
 
-	// if err != nil {
-	// 	return fmt.Errorf("unable to get destinations from database for src '%s': %w", src, err)
-	// }
+	if err != nil {
+		return fmt.Errorf("unable to get destinations from database for src '%s': %w", src, err)
+	}
 
 	return nil
 }

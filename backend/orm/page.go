@@ -18,10 +18,19 @@ type OrmPage struct {
 	page.Page
 
 	id            int
+	siteId        int
 	NextCrawl     time.Time
 	CrawlInterval int
 	IntervalDelta int
 	Assigned      bool
+}
+
+func (o *OrmPage) Site() (OrmSite, error) {
+	s, err := SiteByID(o.id)
+	if err != nil {
+		return s, err
+	}
+	return s, err
 }
 
 func (o *OrmPage) SaveCrawl(datetime time.Time, success bool, failureReason tasks.FailureReason, contentChanged bool, hash hash.Hash) error {
@@ -54,7 +63,7 @@ func SaveNewPage(p page.Page) (OrmPage, error) {
 	var s OrmSite
 	var err error
 
-	s, err = SaveNewSite(p.Url.StringNoPath())
+	s, err = SiteByUrlOrCreate(p.Url.StringNoPath())
 	if err != nil {
 		return o, fmt.Errorf("unable to save new page '%v': %w", p, err)
 	}
@@ -108,7 +117,7 @@ func (o *OrmPage) updateLinks() error {
 }
 
 func (o *OrmPage) Save(updateLinks bool) error {
-	s, err := SaveNewSite(o.Url.FQDN())
+	s, err := SiteByUrlOrCreate(o.Url.FQDN())
 	if err != nil {
 		return fmt.Errorf("unable to save page '%v': %w", o, err)
 	}
@@ -134,11 +143,10 @@ func (o *OrmPage) Save(updateLinks bool) error {
 
 func pageFromRow(row pgx.Row, loadLinks bool) (OrmPage, error) {
 	var p OrmPage
-	var siteId int
 	var path string
 	var hashS string
 
-	err := row.Scan(&p.id, &siteId, &path, &p.Title, &p.OgTitle, &p.OgDescription, &p.OgSiteName, &p.NextCrawl, &p.CrawlInterval, &p.IntervalDelta, &p.Assigned, &hashS)
+	err := row.Scan(&p.id, &p.siteId, &path, &p.Title, &p.OgTitle, &p.OgDescription, &p.OgSiteName, &p.NextCrawl, &p.CrawlInterval, &p.IntervalDelta, &p.Assigned, &hashS)
 
 	if err != nil {
 		return p, err
@@ -151,7 +159,7 @@ func pageFromRow(row pgx.Row, loadLinks bool) (OrmPage, error) {
 	}
 
 	// Get Url
-	site, err := SiteByID(siteId)
+	site, err := SiteByID(p.siteId)
 
 	if err != nil {
 		return p, err

@@ -4,44 +4,87 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"time"
 
 	"github.com/ZakkBob/AskDave/gocommon/robots"
+	"github.com/jackc/pgx/v5"
 )
 
-func ValidatorByUrl(s string) (robots.UrlValidator, error) {
-	query := `SELECT allowed_patterns, disallowed_patterns 
-		FROM robots 
-		JOIN site 
-		ON robots.site_id = site.id 
-		AND site.url = $1;`
+type OrmValidator struct {
+	robots.UrlValidator
 
+	id        int
+	site      int
+	LastCrawl time.Time
+}
+
+func (v *OrmValidator) Save() error {
+	query := `UPDATE robots 
+		SET (allowed_patterns, disallowed_patterns, last_crawl) = ($2, $3, $4) 
+		WHERE robots.id = $1;`
+
+	_, err := dbpool.Exec(context.Background(), query, v.id, v.AllowedStrings(), v.DisallowedStrings(), v.LastCrawl)
+	if err != nil {
+		return fmt.Errorf("unable to save robots result: %w", err)
+	}
+	return nil
+}
+
+func validatorFromRow(row pgx.Row) (OrmValidator, error) {
+	var v OrmValidator
 	var allowedPatterns []string
 	var disallowedPatterns []string
 
-	row := dbpool.QueryRow(context.Background(), query, s)
-	err := row.Scan(&allowedPatterns, &disallowedPatterns)
+	err := row.Scan(&allowedPatterns, &disallowedPatterns, &v.site, &v.LastCrawl)
 	if err != nil {
-		return robots.UrlValidator{}, fmt.Errorf("unable to get validator for url '%s': %w", s, err)
+		return v, err
 	}
-
-	var validator robots.UrlValidator
 
 	for _, allowed := range allowedPatterns {
 		r, err := regexp.Compile(allowed)
 		if err != nil {
-			return robots.UrlValidator{}, fmt.Errorf("unable to parse regex '%s': %w", allowed, err)
+			return v, err
 		}
-		validator.AllowedPatterns = append(validator.AllowedPatterns, r)
+		v.AllowedPatterns = append(v.AllowedPatterns, r)
 	}
 
 	for _, disallowed := range disallowedPatterns {
 		r, err := regexp.Compile(disallowed)
 		if err != nil {
-			return robots.UrlValidator{}, fmt.Errorf("unable to parse regex '%s': %w", disallowed, err)
+			return v, err
 		}
-		validator.DisallowedPatterns = append(validator.DisallowedPatterns, r)
+		v.DisallowedPatterns = append(v.DisallowedPatterns, r)
 	}
 
-	return validator, nil
+	return v, nil
+}
 
+func ValidatorByUrl(urlS string) (OrmValidator, error) {
+	query := `SELECT allowed_patterns, disallowed_patterns, site, last_crawl 
+		FROM robots 
+		JOIN site 
+		ON robots.site_id = site.id 
+		AND site.url = $1;`
+
+	row := dbpool.QueryRow(context.Background(), query, urlS)
+	o, err := validatorFromRow(row)
+	if err != nil {
+		return o, fmt.Errorf("unable to get validator for url '%s': %w", urlS, err)
+	}
+
+	return o, nil
+}
+
+func ValidatorByID(id int) (OrmValidator, error) {
+	query := `SELECT allowed_patterns, disallowed_patterns, site, last_crawl 
+		FROM robots 
+		WHERE robots.id = $1;`
+
+	row := dbpool.QueryRow(context.Background(), query, id)
+	o, err := validatorFromRow(row)
+	if err != nil {
+		return o, fmt.Errorf("unable to get validator for id '%d': %w", id, err)
+	}
+
+	return o, nil
 }

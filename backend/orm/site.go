@@ -12,7 +12,11 @@ type OrmSite struct {
 	Url url.Url
 }
 
-func SaveNewSite(urlS string) (OrmSite, error) {
+func (o *OrmSite) Validator() (OrmValidator, error) {
+	return ValidatorByID(o.id)
+}
+
+func SiteByUrlOrCreate(urlS string) (OrmSite, error) {
 	o, err := SiteByUrl(urlS)
 
 	if err == nil {

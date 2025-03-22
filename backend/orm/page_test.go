@@ -27,7 +27,7 @@ func TestSaveNewPage(t *testing.T) {
 		Hash:          hash.Hashs(""),
 	}
 
-	_, err = orm.SaveNewSite("www.test.com")
+	_, err = orm.SiteByUrlOrCreate("www.test.com")
 	if err != nil {
 		t.Errorf("didn't expect an error: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestSavePage(t *testing.T) {
 		Hash:          hash.Hashs(""),
 	}
 
-	_, err = orm.SaveNewSite("www.test.com")
+	_, err = orm.SiteByUrlOrCreate("www.test.com")
 	if err != nil {
 		t.Errorf("didn't expect an error: %v", err)
 	}

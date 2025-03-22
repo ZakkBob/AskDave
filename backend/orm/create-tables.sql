@@ -52,7 +52,7 @@ CREATE TABLE link (
 
 CREATE TABLE robots (
   id SERIAL PRIMARY KEY NOT NULL,
-  site_id integer references site(id) NOT NULL,
+  site integer references site(id) NOT NULL,
   allowed_patterns varchar(50)[],
   disallowed_patterns varchar(50)[],
   last_crawl date
