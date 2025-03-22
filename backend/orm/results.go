@@ -3,6 +3,7 @@ package orm
 import (
 	"time"
 
+	"github.com/ZakkBob/AskDave/gocommon/hash"
 	"github.com/ZakkBob/AskDave/gocommon/tasks"
 
 	"context"
@@ -13,7 +14,7 @@ func SaveResults(r *tasks.Results) error {
 	robotsQuery := `UPDATE robots 
 		SET (allowed_patterns, disallowed_patterns, last_crawl) = ($1, $2, CURRENT_DATE) 
 		FROM site WHERE site.url = $3 
-		AND site.id = robots.site_id;`
+		AND site.id = robots.site;`
 
 	for urlS, robotsResult := range r.Robots {
 		if !robotsResult.Changed {
@@ -39,6 +40,8 @@ func SaveResults(r *tasks.Results) error {
 			return fmt.Errorf("unable to save page result: %w", err)
 		}
 
+		var h hash.Hash
+
 		if pageResult.Changed {
 			p.Title = pageResult.Page.Title
 			p.OgTitle = pageResult.Page.OgTitle
@@ -46,32 +49,37 @@ func SaveResults(r *tasks.Results) error {
 			p.Hash = pageResult.Page.Hash
 			p.Links = pageResult.Page.Links
 
-			if pageResult.Changed {
-				p.IntervalDelta--
-				if p.IntervalDelta > -1 {
-					p.IntervalDelta = -1
-				}
-			} else {
-				p.IntervalDelta++
-				if p.IntervalDelta < 1 {
-					p.IntervalDelta = 1
-				}
+			p.IntervalDelta--
+			if p.IntervalDelta > -1 {
+				p.IntervalDelta = -1
 			}
-
-			p.CrawlInterval += p.IntervalDelta
-			if p.CrawlInterval < minCrawlInterval {
-				p.CrawlInterval = minCrawlInterval
-			} else if p.CrawlInterval > maxCrawlInterval {
-				p.CrawlInterval = maxCrawlInterval
-			}
-			p.NextCrawl = p.NextCrawl.AddDate(0, 0, p.CrawlInterval)
-
-			err = p.Save(false)
-			if err != nil {
-				return fmt.Errorf("unable to save page result: %w", err)
+		} else {
+			p.IntervalDelta++
+			if p.IntervalDelta < 1 {
+				p.IntervalDelta = 1
 			}
 		}
-		err = p.SaveCrawl(time.Now(), pageResult.Success, pageResult.FailureReason, pageResult.Changed, pageResult.Page.Hash)
+
+		p.CrawlInterval += p.IntervalDelta
+		if p.CrawlInterval < minCrawlInterval {
+			p.CrawlInterval = minCrawlInterval
+		} else if p.CrawlInterval > maxCrawlInterval {
+			p.CrawlInterval = maxCrawlInterval
+		}
+		p.NextCrawl = p.NextCrawl.AddDate(0, 0, p.CrawlInterval)
+
+		err = p.Save(true)
+		if err != nil {
+			return fmt.Errorf("unable to save page result: %w", err)
+		}
+
+		if pageResult.Page == nil {
+			h = hash.Hashs("")
+		} else {
+			h = pageResult.Page.Hash
+		}
+
+		err = p.SaveCrawl(time.Now(), pageResult.Success, pageResult.FailureReason, pageResult.Changed, h)
 		if err != nil {
 			return fmt.Errorf("unable to save page result: %w", err)
 		}

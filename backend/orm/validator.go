@@ -76,6 +76,29 @@ func validatorFromRow(row pgx.Row) (OrmValidator, error) {
 	return v, nil
 }
 
+func ValidatorByUrlOrCreate(urlS string) (OrmValidator, error) {
+	ormV, err := ValidatorByUrl(urlS)
+	if err == nil {
+		return ormV, nil
+	}
+
+	s, err := SiteByUrl(urlS)
+	if err != nil {
+		return OrmValidator{}, fmt.Errorf("unable to get validator for url '%s' or create: %w", urlS, err)
+	}
+
+	v, err := robots.FromStrings([]string{}, []string{})
+	if err != nil {
+		return OrmValidator{}, fmt.Errorf("unable to get validator for url '%s' or create: %w", urlS, err)
+	}
+
+	ormV, err = SaveNewValidator(*v, s.id)
+	if err != nil {
+		return OrmValidator{}, fmt.Errorf("unable to get validator for url '%s' or create: %w", urlS, err)
+	}
+	return ormV, nil
+}
+
 func ValidatorByUrl(urlS string) (OrmValidator, error) {
 	query := `SELECT allowed_patterns, disallowed_patterns, site, last_crawl 
 		FROM robots 

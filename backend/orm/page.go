@@ -2,14 +2,13 @@ package orm
 
 import (
 	"context"
+	"errors"
 	"time"
 
-	"errors"
 	"fmt"
 
 	"github.com/ZakkBob/AskDave/gocommon/hash"
 	"github.com/ZakkBob/AskDave/gocommon/page"
-	"github.com/ZakkBob/AskDave/gocommon/robots"
 	"github.com/ZakkBob/AskDave/gocommon/tasks"
 	"github.com/ZakkBob/AskDave/gocommon/url"
 	"github.com/jackc/pgx/v5"
@@ -27,7 +26,7 @@ type OrmPage struct {
 }
 
 func (o *OrmPage) Site() (OrmSite, error) {
-	s, err := SiteByID(o.id)
+	s, err := SiteByID(o.siteId)
 	if err != nil {
 		return s, err
 	}
@@ -35,8 +34,8 @@ func (o *OrmPage) Site() (OrmSite, error) {
 }
 
 func (o *OrmPage) SaveCrawl(datetime time.Time, success bool, failureReason tasks.FailureReason, contentChanged bool, hash hash.Hash) error {
-	query := `INSERT INTO crawl (page, datetime, success, failure_reason, content_changed, hash
-		VALUES ($1, $2, $3, $4, $5, %6);`
+	query := `INSERT INTO crawl (page, datetime, success, failure_reason, content_changed, hash)
+		VALUES ($1, $2, $3, $4, $5, $6);`
 
 	_, err := dbpool.Exec(context.Background(), query, o.id, datetime, success, failureReason, contentChanged, hash.String())
 	if err != nil {
@@ -44,6 +43,32 @@ func (o *OrmPage) SaveCrawl(datetime time.Time, success bool, failureReason task
 	}
 
 	return nil
+}
+
+func PageByUrlOrCreate(urlS string, loadLinks bool) (OrmPage, error) {
+	u, err := url.ParseAbs(urlS)
+	if err != nil {
+		return OrmPage{}, fmt.Errorf("unable to get page by url or create: '%w'", err)
+	}
+
+	p, err := PageByUrl(urlS, loadLinks)
+	if errors.Is(err, pgx.ErrNoRows) {
+		p, err = SaveNewPage(page.Page{
+			Url:           u,
+			Title:         "",
+			OgTitle:       "",
+			OgDescription: "",
+			OgSiteName:    "",
+			Links:         []url.Url{},
+			Hash:          hash.Hashs(""),
+		})
+		if err != nil {
+			return OrmPage{}, fmt.Errorf("unable to get page by url or create: %w", err)
+		}
+	}
+
+	return p, nil
+
 }
 
 func SaveNewPage(p page.Page) (OrmPage, error) {
@@ -83,12 +108,7 @@ func SaveNewPage(p page.Page) (OrmPage, error) {
 		return o, fmt.Errorf("unable to save new page '%v': %w", o, err)
 	}
 
-	v, err := robots.FromStrings([]string{}, []string{})
-	if err != nil {
-		return o, fmt.Errorf("unable to save new page '%v': %w", o, err)
-	}
-
-	_, err = SaveNewValidator(*v, s.id)
+	_, err = ValidatorByUrlOrCreate(p.Url.StringNoPath())
 	if err != nil {
 		return o, fmt.Errorf("unable to save new page '%v': %w", o, err)
 	}
@@ -103,21 +123,7 @@ func (o *OrmPage) updateLinks() error {
 	var err error
 
 	for _, dst := range o.Links { // Could be optimised if removing the orm
-		p, err = PageByUrl(dst.String(), true)
-		if errors.Is(err, pgx.ErrNoRows) {
-			p, err = SaveNewPage(page.Page{
-				Url:           dst,
-				Title:         "",
-				OgTitle:       "",
-				OgDescription: "",
-				OgSiteName:    "",
-				Links:         []url.Url{},
-				Hash:          hash.Hashs(""),
-			})
-			if err != nil {
-				return fmt.Errorf("unable to update links (saving page) '%v': %w", o, err)
-			}
-		}
+		p, err = PageByUrlOrCreate(dst.String(), true)
 		if err != nil {
 			return fmt.Errorf("unable to update links '%v': %w", o, err)
 		}
@@ -128,9 +134,9 @@ func (o *OrmPage) updateLinks() error {
 }
 
 func (o *OrmPage) Save(updateLinks bool) error {
-	s, err := SiteByUrlOrCreate(o.Url.FQDN())
+	s, err := o.Site()
 	if err != nil {
-		return fmt.Errorf("unable to save page '%v': %w", o, err)
+		return fmt.Errorf("unable to save page with url '%s': %w", o.Url.String(), err)
 	}
 
 	query := `UPDATE page
@@ -139,13 +145,13 @@ func (o *OrmPage) Save(updateLinks bool) error {
 
 	_, err = dbpool.Exec(context.Background(), query, o.id, s.id, o.Url.PathString(), o.Title, o.OgTitle, o.OgDescription, o.OgSiteName, o.NextCrawl, o.CrawlInterval, o.IntervalDelta, o.Assigned, o.Hash.String())
 	if err != nil {
-		return fmt.Errorf("unable to save page '%v': %w", o, err)
+		return fmt.Errorf("unable to save page with url '%s': %w", o.Url.String(), err)
 	}
 
 	if updateLinks {
 		err = o.updateLinks()
 		if err != nil {
-			return fmt.Errorf("unable to save page links '%v': %w", o, err)
+			return fmt.Errorf("unable to save page links with url '%s': %w", o.Url.String(), err)
 		}
 	}
 

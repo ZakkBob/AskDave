@@ -83,6 +83,9 @@ func (u *Url) PathString() string {
 	for _, p := range u.Path {
 		s += "/" + p
 	}
+	if u.TrailingSlash {
+		s += "/"
+	}
 	return s
 }
 
@@ -144,13 +147,7 @@ func (u *Url) String() string {
 		s += ":" + strconv.Itoa(u.Port)
 	}
 
-	if len(u.Path) != 0 {
-		s += u.PathString()
-	}
-
-	if u.TrailingSlash {
-		s += "/"
-	}
+	s += u.PathString()
 
 	return s
 }

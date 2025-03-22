@@ -19,7 +19,7 @@ type DaveApiClient struct {
 
 func (d *DaveApiClient) FetchTasks() *tasks.Tasks {
 	f := fetcher.NetFetcher{}
-	resp, err := f.Fetch(d.Url + "/work")
+	resp, err := f.Fetch(d.Url + "/tasks")
 	if err != nil {
 		fmt.Print(err.Error())
 	}
@@ -35,7 +35,7 @@ func (d *DaveApiClient) FetchTasks() *tasks.Tasks {
 func (d *DaveApiClient) UploadTasks() error {
 	jsonData, _ := json.MarshalIndent(&d.TaskRunner.Results, "", "  ")
 	postData := strings.NewReader(string(jsonData))
-	resp, err := http.Post(d.Url+"/work", "application/json", postData)
+	resp, err := http.Post(d.Url+"/results", "application/json", postData)
 
 	if err != nil {
 		return fmt.Errorf("uploading tasks: %w", err)
