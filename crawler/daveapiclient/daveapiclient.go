@@ -38,7 +38,7 @@ func (d *DaveApiClient) UploadTasks() error {
 	resp, err := http.Post(d.Url+"/work", "application/json", postData)
 
 	if err != nil {
-		return fmt.Errorf("uploading tasks: %v", err)
+		return fmt.Errorf("uploading tasks: %w", err)
 	}
 
 	defer resp.Body.Close()
@@ -46,7 +46,7 @@ func (d *DaveApiClient) UploadTasks() error {
 	respBody, err := io.ReadAll(resp.Body)
 
 	if err != nil {
-		return fmt.Errorf("uploading tasks: %v", err)
+		return fmt.Errorf("uploading tasks: %w", err)
 	}
 
 	fmt.Print(string(respBody))

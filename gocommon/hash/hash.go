@@ -24,12 +24,21 @@ func (h *Hash) MarshalJSON() ([]byte, error) {
 func (h *Hash) UnmarshalJSON(data []byte) error {
 	var s string
 	json.Unmarshal(data, &s)
-	d, err := hex.DecodeString(s)
+	temp, err := StrToHash(s)
 	if err != nil {
 		return err
 	}
-	*h = Hash(d)
+	*h = temp
 	return nil
+}
+
+func StrToHash(s string) (Hash, error) {
+	d, err := hex.DecodeString(s)
+	if err != nil {
+		return Hash{}, err
+	}
+
+	return Hash(d), nil
 }
 
 func (h *Hash) String() string {

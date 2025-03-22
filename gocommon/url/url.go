@@ -110,6 +110,22 @@ func (u *Url) Copy(dst *Url) {
 	copy(dst.Path, u.Path)
 }
 
+func (u *Url) StringNoPath() string {
+	s := ""
+
+	if u.Protocol != UnspecifiedProtocol {
+		s += protocolToString(u.Protocol) + "://"
+	}
+
+	s += u.FQDN()
+
+	if (u.Port != 0) && !(u.Protocol == HttpProtocol && u.Port == 80) && !(u.Protocol == HttpsProtocol && u.Port == 443) {
+		s += ":" + strconv.Itoa(u.Port)
+	}
+
+	return s
+}
+
 func (u *Url) String() string {
 	s := ""
 
@@ -139,6 +155,20 @@ func (u *Url) String() string {
 	return s
 }
 
+func ParseMany(s []string) ([]Url, error) {
+	urls := make([]Url, 0)
+	var u Url
+	var err error
+	for _, urlS := range s {
+		u, err = ParseAbs(urlS)
+		if err != nil {
+			return nil, err
+		}
+		urls = append(urls, u)
+	}
+	return urls, nil
+}
+
 func ParseAbs(s string) (Url, error) {
 	original_s := s
 	var parsed Url
@@ -154,32 +184,32 @@ func ParseAbs(s string) (Url, error) {
 		s = protocolMatches[2] //remove the protocol to simplify future regex (this pattern repeats btw)
 	}
 
-	subdomainRegex := regexp.MustCompile(`^([a-z0-9-]+?)\.([a-z0-9-]*?\..*)`)
+	subdomainRegex := regexp.MustCompile(`^([a-zA-z0-9-]+?)\.([a-zA-z0-9-]*?\..*)`)
 	subdomainMatches := subdomainRegex.FindStringSubmatch(s)
 
 	if len(subdomainMatches) > 2 {
 		subdomain := subdomainMatches[1]
-		parsed.Subdomain = subdomain
+		parsed.Subdomain = strings.ToLower(subdomain)
 		s = subdomainMatches[2] //see what i mean
 	}
 
-	domainRegex := regexp.MustCompile(`^([a-z0-9-]+?)\.(.*)`)
+	domainRegex := regexp.MustCompile(`^([a-zA-z0-9-]+?)\.(.*)`)
 	domainMatches := domainRegex.FindStringSubmatch(s)
 
 	if len(domainMatches) > 2 {
 		domain := domainMatches[1]
-		parsed.Domain = domain
+		parsed.Domain = strings.ToLower(domain)
 		s = domainMatches[2]
 	} else {
 		return parsed, fmt.Errorf("url: '%s' does not contain a domain", original_s)
 	}
 
-	tldRegex := regexp.MustCompile(`^([a-z0-9-]+?)([/:].*)?$`)
+	tldRegex := regexp.MustCompile(`^([a-zA-z0-9-]+?)([/:].*)?$`)
 	tldMatches := tldRegex.FindStringSubmatch(s)
 
 	if len(tldMatches) > 2 {
 		tld := tldMatches[1]
-		parsed.Tld = tld
+		parsed.Tld = strings.ToLower(tld)
 		s = tldMatches[2]
 	} else {
 		return parsed, fmt.Errorf("url: '%s' does not contain a tld", original_s)
