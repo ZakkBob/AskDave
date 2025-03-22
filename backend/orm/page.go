@@ -9,6 +9,7 @@ import (
 
 	"github.com/ZakkBob/AskDave/gocommon/hash"
 	"github.com/ZakkBob/AskDave/gocommon/page"
+	"github.com/ZakkBob/AskDave/gocommon/robots"
 	"github.com/ZakkBob/AskDave/gocommon/tasks"
 	"github.com/ZakkBob/AskDave/gocommon/url"
 	"github.com/jackc/pgx/v5"
@@ -78,6 +79,16 @@ func SaveNewPage(p page.Page) (OrmPage, error) {
 
 	err = o.updateLinks()
 
+	if err != nil {
+		return o, fmt.Errorf("unable to save new page '%v': %w", o, err)
+	}
+
+	v, err := robots.FromStrings([]string{}, []string{})
+	if err != nil {
+		return o, fmt.Errorf("unable to save new page '%v': %w", o, err)
+	}
+
+	_, err = SaveNewValidator(*v, s.id)
 	if err != nil {
 		return o, fmt.Errorf("unable to save new page '%v': %w", o, err)
 	}

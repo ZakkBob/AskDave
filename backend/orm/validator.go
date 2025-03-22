@@ -30,6 +30,23 @@ func (v *OrmValidator) Save() error {
 	return nil
 }
 
+func SaveNewValidator(v robots.UrlValidator, siteID int) (OrmValidator, error) {
+	var ormV OrmValidator
+
+	query := `INSERT INTO robots (allowed_patterns, disallowed_patterns, site)
+		VALUES ($1, $2, $3)
+		RETURNING id;`
+
+	row := dbpool.QueryRow(context.Background(), query, v.AllowedStrings(), v.DisallowedStrings(), siteID)
+
+	err := row.Scan(&ormV.id)
+	if err != nil {
+		return ormV, fmt.Errorf("unable to save new validator '%v': %w", v, err)
+	}
+
+	return ormV, nil
+}
+
 func validatorFromRow(row pgx.Row) (OrmValidator, error) {
 	var v OrmValidator
 	var allowedPatterns []string
