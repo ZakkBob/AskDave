@@ -2,110 +2,138 @@ package orm
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"time"
 
+	"github.com/ZakkBob/AskDave/gocommon/robots"
 	"github.com/ZakkBob/AskDave/gocommon/url"
+	"github.com/jackc/pgx/v5"
 )
 
 type OrmSite struct {
-	id  int
-	Url url.Url
+	id              int
+	Url             url.Url
+	Validator       robots.UrlValidator
+	LastRobotsCrawl time.Time
 }
 
-func (o *OrmSite) Validator() (OrmValidator, error) {
-	return ValidatorByID(o.id)
+func (s *OrmSite) ID() int {
+	return s.id
 }
 
-func SiteByUrlOrCreate(urlS string) (OrmSite, error) {
-	o, err := SiteByUrl(urlS)
-
-	if err == nil {
-		return o, nil
-	}
-
-	u, err := url.ParseAbs(urlS)
-
-	if err != nil {
-		return OrmSite{}, fmt.Errorf("unable to save new site with url '%s': %w", urlS, err)
-	}
-
-	o = OrmSite{
-		Url: u,
-	}
-
-	query := `INSERT INTO site (url)
-		VALUES ($1)
-		RETURNING id;`
-
-	row := dbpool.QueryRow(context.Background(), query, urlS)
-
-	err = row.Scan(&o.id)
-
-	if err != nil {
-		return o, fmt.Errorf("unable to save new site with url '%s': %w", urlS, err)
-	}
-
-	return o, nil
-}
-
-func (o *OrmSite) Save() error {
-	query := `UPDATE site
-		SET url = $2
-		WHERE site.id = $1;`
-
-	_, err := dbpool.Exec(context.Background(), query, o.id, o.Url)
-	if err != nil {
-		return fmt.Errorf("unable to save site with id '%d': %w", o.id, err)
-	}
-
-	return nil
-}
-
-func SiteByID(id int) (OrmSite, error) {
+func CreateSite(u url.Url, validator robots.UrlValidator, lastRobotsCrawl time.Time) (OrmSite, error) {
 	var s OrmSite
-	var urlS string
+	s.Url = u
+	s.Validator = validator
+	s.LastRobotsCrawl = lastRobotsCrawl
 
-	query := `SELECT id, url
-		FROM site
-		WHERE site.id = $1;`
+	query := `INSERT INTO site (url, allowed_patterns, disallowed_patterns, last_robots_crawl)
+				VALUES ($1, $2, $3, $4)
+				RETURNING id;`
 
-	row := dbpool.QueryRow(context.Background(), query, id)
-	err := row.Scan(&s.id, &urlS)
-
+	row := dbpool.QueryRow(context.Background(), query, u.String(), validator.AllowedStrings(), validator.DisallowedStrings(), lastRobotsCrawl)
+	err := row.Scan(&s.id)
 	if err != nil {
-		return s, fmt.Errorf("unable to get site from database for id '%d': %w", id, err)
+		return s, fmt.Errorf("failed to scan query results': %w", err)
 	}
 
-	u, err := url.ParseAbs(urlS)
+	return s, nil
+}
 
+// eg. SELECT * FROM site WHERE id=1;
+func SiteFromQuery(query string, args ...interface{}) (OrmSite, error) {
+	var urlS string
+	var allowedStrings []string
+	var disallowedStrings []string
+	var s OrmSite
+
+	row := dbpool.QueryRow(context.Background(), query, args...)
+	err := row.Scan(&s.id, &urlS, &allowedStrings, &disallowedStrings, &s.LastRobotsCrawl)
 	if err != nil {
-		return OrmSite{}, fmt.Errorf("unable to get site from database for id '%d': %w", id, err)
+		return s, fmt.Errorf("failed to scan query results': %w", err)
+	}
+
+	v, err := robots.FromStrings(allowedStrings, disallowedStrings)
+	if err != nil {
+		return s, fmt.Errorf("failed to construct UrlValidator: %w", err)
+	}
+
+	s.Validator = *v
+
+	u, err := url.ParseAbs(urlS)
+	if err != nil {
+		return s, fmt.Errorf("failed to parse url '%s': %w", urlS, err)
 	}
 
 	s.Url = u
 	return s, nil
 }
 
-func SiteByUrl(urlS string) (OrmSite, error) {
-	var s OrmSite
+// Queries for site by url
+// creates new empty site if not found
+func SiteByUrlOrCreateEmpty(u url.Url) (OrmSite, error) {
+	s, err := SiteByUrl(u)
 
-	query := `SELECT id
-		FROM site
-		WHERE site.url = $1;`
-
-	row := dbpool.QueryRow(context.Background(), query, urlS)
-	err := row.Scan(&s.id)
-
-	if err != nil {
-		return s, fmt.Errorf("unable to get site from database for url '%s': %w", urlS, err)
+	if err == nil {
+		return s, nil
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return s, fmt.Errorf("failed to get site with url '%s': %w", u.String(), err)
 	}
 
-	u, err := url.ParseAbs(urlS)
-
+	v, err := robots.FromStrings([]string{}, []string{})
 	if err != nil {
-		return OrmSite{}, fmt.Errorf("unable to get site from database for url '%s': %w", urlS, err)
+		return s, fmt.Errorf("failed to contruct empty UrlValidator: %w", err)
 	}
 
-	s.Url = u
+	t, err := time.Parse("2006-01-02", "0000-01-01")
+	if err != nil {
+		return s, fmt.Errorf("failed to contruct empty time: %w", err)
+	}
+
+	s, err = CreateSite(u, *v, t)
+	if err != nil {
+		return s, fmt.Errorf("failed to create site: %w", err)
+	}
+
+	return s, nil
+}
+
+func (o *OrmSite) Save() error {
+	query := `UPDATE site
+				SET url = $2, allowed_patterns = $3, disallowed_patterns = $4, last_robots_crawl = $5
+				WHERE id = $1;`
+
+	_, err := dbpool.Exec(context.Background(), query, o.id, o.Url.String(), o.Validator.AllowedStrings(), o.Validator.DisallowedStrings(), o.LastRobotsCrawl)
+	if err != nil {
+		return fmt.Errorf("failed to execute query '%s': %w", query, err)
+	}
+
+	return nil
+}
+
+func SiteByID(id int) (OrmSite, error) {
+	query := `SELECT *
+				FROM site
+				WHERE id = $1;`
+
+	s, err := SiteFromQuery(query, id)
+	if err != nil {
+		return s, fmt.Errorf("failed to get site with query '%s': %w", query, err)
+	}
+
+	return s, nil
+}
+
+func SiteByUrl(u url.Url) (OrmSite, error) {
+	query := `SELECT *
+				FROM site
+				WHERE url = $1;`
+
+	s, err := SiteFromQuery(query, u.String())
+	if err != nil {
+		return s, fmt.Errorf("failed to get site with query '%s': %w", query, err)
+	}
+
 	return s, nil
 }
