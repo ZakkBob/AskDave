@@ -32,7 +32,7 @@ func Connect(url string) error {
 	}
 	pool, err := pgxpool.New(context.Background(), url)
 	if err != nil {
-		return fmt.Errorf("Unable to connect to database: %w\n", err)
+		return fmt.Errorf("unable to connect to database: %w", err)
 	}
 	dbpool = pool
 	return nil
