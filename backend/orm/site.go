@@ -22,6 +22,19 @@ func (s *OrmSite) ID() int {
 	return s.id
 }
 
+func (o *OrmSite) Save() error {
+	query := `UPDATE site
+				SET url = $2, allowed_patterns = $3, disallowed_patterns = $4, last_robots_crawl = $5
+				WHERE id = $1;`
+
+	_, err := dbpool.Exec(context.Background(), query, o.id, o.Url.String(), o.Validator.AllowedStrings(), o.Validator.DisallowedStrings(), o.LastRobotsCrawl)
+	if err != nil {
+		return fmt.Errorf("failed to execute query '%s': %w", query, err)
+	}
+
+	return nil
+}
+
 func CreateSite(u url.Url, validator robots.UrlValidator, lastRobotsCrawl time.Time) (OrmSite, error) {
 	var s OrmSite
 	s.Url = u
@@ -38,6 +51,24 @@ func CreateSite(u url.Url, validator robots.UrlValidator, lastRobotsCrawl time.T
 		return s, fmt.Errorf("failed to scan query results': %w", err)
 	}
 
+	return s, nil
+}
+
+func CreateEmptySite(u url.Url) (OrmSite, error) {
+	v, err := robots.FromStrings([]string{}, []string{})
+	if err != nil {
+		return OrmSite{}, fmt.Errorf("failed to contruct empty UrlValidator: %w", err)
+	}
+
+	t, err := time.Parse("2006-01-02", "0000-01-01")
+	if err != nil {
+		return OrmSite{}, fmt.Errorf("failed to contruct empty time: %w", err)
+	}
+
+	s, err := CreateSite(u, *v, t)
+	if err != nil {
+		return s, fmt.Errorf("failed to create site: %w", err)
+	}
 	return s, nil
 }
 
@@ -81,35 +112,11 @@ func SiteByUrlOrCreateEmpty(u url.Url) (OrmSite, error) {
 		return s, fmt.Errorf("failed to get site with url '%s': %w", u.String(), err)
 	}
 
-	v, err := robots.FromStrings([]string{}, []string{})
+	s, err = CreateEmptySite(u)
 	if err != nil {
-		return s, fmt.Errorf("failed to contruct empty UrlValidator: %w", err)
+		return s, fmt.Errorf("failed to create empty site: %w", err)
 	}
-
-	t, err := time.Parse("2006-01-02", "0000-01-01")
-	if err != nil {
-		return s, fmt.Errorf("failed to contruct empty time: %w", err)
-	}
-
-	s, err = CreateSite(u, *v, t)
-	if err != nil {
-		return s, fmt.Errorf("failed to create site: %w", err)
-	}
-
 	return s, nil
-}
-
-func (o *OrmSite) Save() error {
-	query := `UPDATE site
-				SET url = $2, allowed_patterns = $3, disallowed_patterns = $4, last_robots_crawl = $5
-				WHERE id = $1;`
-
-	_, err := dbpool.Exec(context.Background(), query, o.id, o.Url.String(), o.Validator.AllowedStrings(), o.Validator.DisallowedStrings(), o.LastRobotsCrawl)
-	if err != nil {
-		return fmt.Errorf("failed to execute query '%s': %w", query, err)
-	}
-
-	return nil
 }
 
 func SiteByID(id int) (OrmSite, error) {

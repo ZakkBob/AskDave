@@ -91,13 +91,31 @@ func TestSiteSave(t *testing.T) {
 	assert.WithinDuration(t, updatedTime, savedSite.LastRobotsCrawl, time.Second, "Retrieved timestamps should be reasonably close")
 }
 
+func TestCreateEmptySite(t *testing.T) {
+	u := uniqueURL(t)
+
+	defaultTime, err := time.Parse("2006-01-02", "0000-01-01")
+	require.NoError(t, err, "Parse should not return an error")
+
+	createdSite, err := orm.CreateEmptySite(u)
+	require.NoError(t, err, "CreateEmptySite should not return an error")
+
+	assert.NotZero(t, createdSite.ID(), "Returned OrmSite should have a non-zero ID")
+	assert.Equal(t, u.String(), createdSite.Url.String(), "Returned OrmSite should have the correct URL")
+	assert.Equal(t, []string{}, createdSite.Validator.AllowedStrings(), "Retrieved site should have the correct allowed strings")
+	assert.Equal(t, []string{}, createdSite.Validator.DisallowedStrings(), "Retrieved site should have the correct disallowed strings")
+	assert.WithinDuration(t, defaultTime, createdSite.LastRobotsCrawl, time.Second, "Timestamps should be reasonably close")
+}
+
 func TestSiteByUrlOrCreateEmpty(t *testing.T) {
 	t.Run("Exists", func(t *testing.T) {
 		u := uniqueURL(t)
-		v := robots.UrlValidator{}
+		v, err := robots.FromStrings([]string{"test"}, []string{"testing"})
+		require.NoError(t, err, "FromStrings should not return an error")
+
 		now := time.Now()
 
-		createdSite, err := orm.CreateSite(u, v, now)
+		createdSite, err := orm.CreateSite(u, *v, now)
 		require.NoError(t, err, "CreateSite should not return an error")
 
 		retrievedSite, err := orm.SiteByUrlOrCreateEmpty(u)
