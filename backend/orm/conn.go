@@ -16,6 +16,7 @@ type PgxPoolIface interface {
 	QueryRow(context.Context, string, ...interface{}) pgx.Row
 	Query(context.Context, string, ...interface{}) (pgx.Rows, error)
 	Ping(context.Context) error
+	CopyFrom(context.Context, pgx.Identifier, []string, pgx.CopyFromSource) (int64, error)
 	Close()
 }
 

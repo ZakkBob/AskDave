@@ -2,16 +2,16 @@ package orm
 
 import (
 	"context"
+	"errors"
 	"time"
 
-	"errors"
 	"fmt"
 
 	"github.com/ZakkBob/AskDave/gocommon/hash"
 	"github.com/ZakkBob/AskDave/gocommon/page"
-	"github.com/ZakkBob/AskDave/gocommon/robots"
 	"github.com/ZakkBob/AskDave/gocommon/tasks"
 	"github.com/ZakkBob/AskDave/gocommon/url"
+
 	"github.com/jackc/pgx/v5"
 )
 
@@ -26,19 +26,27 @@ type OrmPage struct {
 	Assigned      bool
 }
 
-func (o *OrmPage) Site() (OrmSite, error) {
-	s, err := SiteByID(o.id)
+func (p *OrmPage) ID() int {
+	return p.id
+}
+
+func (p *OrmPage) SiteID() int {
+	return p.siteId
+}
+
+func (p *OrmPage) Site() (OrmSite, error) {
+	s, err := SiteByID(p.id)
 	if err != nil {
-		return s, err
+		return s, fmt.Errorf("failed to get page's site: %w", err)
 	}
 	return s, err
 }
 
-func (o *OrmPage) SaveCrawl(datetime time.Time, success bool, failureReason tasks.FailureReason, contentChanged bool, hash hash.Hash) error {
+func (p *OrmPage) SaveCrawl(datetime time.Time, success bool, failureReason tasks.FailureReason, contentChanged bool, hash hash.Hash) error {
 	query := `INSERT INTO crawl (page, datetime, success, failure_reason, content_changed, hash
-		VALUES ($1, $2, $3, $4, $5, %6);`
+		VALUES ($1, $2, $3, $4, $5, $6);`
 
-	_, err := dbpool.Exec(context.Background(), query, o.id, datetime, success, failureReason, contentChanged, hash.String())
+	_, err := dbpool.Exec(context.Background(), query, p.id, datetime, success, failureReason, contentChanged, hash.String())
 	if err != nil {
 		return fmt.Errorf("unable to save crawl '%v' '%v' '%v' '%v' '%v': %w", datetime, success, failureReason, contentChanged, hash, err)
 	}
@@ -46,193 +54,207 @@ func (o *OrmPage) SaveCrawl(datetime time.Time, success bool, failureReason task
 	return nil
 }
 
-func SaveNewPage(p page.Page) (OrmPage, error) {
-	query := `INSERT INTO page (site, path, title, og_title, og_description, og_sitename, next_crawl, crawl_interval, interval_delta, assigned, hash)
+func (o *OrmPage) deleteLinksFrom() error {
+	query := `DELETE
+				FROM link
+				WHERE src = $1;`
+
+	_, err := dbpool.Exec(context.Background(), query, o.id)
+	if err != nil {
+		return fmt.Errorf("failed to execute query '%s' with arg '%d'", query, o.id)
+	}
+	return nil
+}
+
+// inefficient probably
+func (o *OrmPage) saveLinks() error {
+	err := o.deleteLinksFrom()
+	if err != nil {
+		return fmt.Errorf("failed to delete links from page: %w", err)
+	}
+
+	query := `SELECT page.id
+                FROM page
+                LEFT JOIN site ON site.id = page.site
+                WHERE site.url = $1 AND page.path = $2;`
+
+	var dstID int
+	var dstIDs []int
+
+	for _, dst := range o.Links {
+		row := dbpool.QueryRow(context.Background(), query, dst.StringNoPath(), dst.PathString())
+		err := row.Scan(&dstID)
+
+		if errors.Is(err, pgx.ErrNoRows) {
+			ormPage, err := CreateEmptyPage(dst)
+			if err != nil {
+				return fmt.Errorf("failed to create empty page with url '%s': %w", dst.String(), err)
+			}
+
+			dstID = ormPage.id
+		} else if err != nil {
+			return fmt.Errorf("failed to get page id with url '%s': %w", dst.String(), err)
+		}
+
+		dstIDs = append(dstIDs, dstID)
+	}
+
+	_, err = dbpool.CopyFrom(
+		context.Background(),
+		pgx.Identifier{"link"},
+		[]string{"src", "dst"},
+		pgx.CopyFromSlice(len(dstIDs), func(i int) ([]any, error) {
+			return []any{o.id, dstIDs[i]}, nil
+		}),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to copy links to database: %w", err)
+	}
+	return nil
+}
+
+func CreatePage(p page.Page, nextCrawl time.Time, crawlInterval int, intervalDelta int, assigned bool) (OrmPage, error) {
+	query := `INSERT INTO page (site, path, title, og_title, og_description, og_sitename, hash, next_crawl, crawl_interval, interval_delta, assigned)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		RETURNING id;`
 
-	nextCrawl := time.Now().AddDate(0, 0, 7)
+	s, err := SiteByUrlOrCreateEmpty(p.Url)
+	if err != nil {
+		return OrmPage{}, fmt.Errorf("failed to get site by url '%s': %w", p.Url.String(), err)
+	}
 
-	o := OrmPage{
+	ormPage := OrmPage{
 		Page:          p,
+		siteId:        s.id,
 		NextCrawl:     nextCrawl,
-		CrawlInterval: 7,
-		IntervalDelta: 1,
-		Assigned:      false,
+		CrawlInterval: crawlInterval,
+		IntervalDelta: intervalDelta,
+		Assigned:      assigned,
 	}
 
-	var s OrmSite
-	var err error
-
-	s, err = SiteByUrlOrCreate(p.Url.StringNoPath())
+	row := dbpool.QueryRow(context.Background(), query, ormPage.siteId, ormPage.Url.PathString(), ormPage.Title, ormPage.OgTitle, ormPage.OgDescription, ormPage.OgSiteName, ormPage.Hash.String(), ormPage.NextCrawl, ormPage.CrawlInterval, ormPage.IntervalDelta, ormPage.Assigned)
+	err = row.Scan(&ormPage.id)
 	if err != nil {
-		return o, fmt.Errorf("unable to save new page '%v': %w", p, err)
+		return ormPage, fmt.Errorf("failed to scan query results: %w", err)
 	}
 
-	row := dbpool.QueryRow(context.Background(), query, s.id, o.Url.PathString(), o.Title, o.OgTitle, o.OgDescription, o.OgSiteName, o.NextCrawl, o.CrawlInterval, o.IntervalDelta, o.Assigned, o.Hash.String())
+	ormPage.saveLinks()
 
-	err = row.Scan(&o.id)
-
-	if err != nil {
-		return o, fmt.Errorf("unable to save new page '%v': %w", p, err)
-	}
-
-	err = o.updateLinks()
-
-	if err != nil {
-		return o, fmt.Errorf("unable to save new page '%v': %w", o, err)
-	}
-
-	v, err := robots.FromStrings([]string{}, []string{})
-	if err != nil {
-		return o, fmt.Errorf("unable to save new page '%v': %w", o, err)
-	}
-
-	_, err = SaveNewValidator(*v, s.id)
-	if err != nil {
-		return o, fmt.Errorf("unable to save new page '%v': %w", o, err)
-	}
-
-	return o, nil
+	return ormPage, nil
 }
 
-func (o *OrmPage) updateLinks() error {
-	DeleteLinksBySrc(o.Url.String())
-
-	var p OrmPage
-	var err error
-
-	for _, dst := range o.Links { // Could be optimised if removing the orm
-		p, err = PageByUrl(dst.String(), true)
-		if errors.Is(err, pgx.ErrNoRows) {
-			p, err = SaveNewPage(page.Page{
-				Url:           dst,
-				Title:         "",
-				OgTitle:       "",
-				OgDescription: "",
-				OgSiteName:    "",
-				Links:         []url.Url{},
-				Hash:          hash.Hashs(""),
-			})
-			if err != nil {
-				return fmt.Errorf("unable to update links (saving page) '%v': %w", o, err)
-			}
-		}
-		if err != nil {
-			return fmt.Errorf("unable to update links '%v': %w", o, err)
-		}
-
-		SaveNewLink(*o, p)
+func CreateEmptyPage(u url.Url) (OrmPage, error) {
+	p := page.Page{
+		Url:           u,
+		Title:         "",
+		OgTitle:       "",
+		OgDescription: "",
+		OgSiteName:    "",
+		Links:         []url.Url{},
+		Hash:          hash.Hashs(""),
 	}
-	return nil
+
+	ormPage, err := CreatePage(p, time.Now(), 7, 0, false)
+	if err != nil {
+		return ormPage, fmt.Errorf("failed to create page: %w", err)
+	}
+
+	return ormPage, nil
 }
 
-func (o *OrmPage) Save(updateLinks bool) error {
-	s, err := SiteByUrlOrCreate(o.Url.FQDN())
-	if err != nil {
-		return fmt.Errorf("unable to save page '%v': %w", o, err)
-	}
-
+func (p *OrmPage) Save() error {
 	query := `UPDATE page
-		SET site = $2, path = $3, title = $4, og_title = $5, og_description = $6, og_sitename = $7, next_crawl = $8, crawl_interval = $9, interval_delta = $10, assigned = $11, hash = $12
-		WHERE page.id = $1;`
+		SET site = @site, path = @path, title = @title, og_title = @og_title, og_description = @og_description, og_sitename = @og_sitename, hash = @hash, next_crawl = @next_crawl, crawl_interval = @crawl_interval, interval_delta = @interval_delta, assigned = @assigned
+		WHERE page.id = @id;`
 
-	_, err = dbpool.Exec(context.Background(), query, o.id, s.id, o.Url.PathString(), o.Title, o.OgTitle, o.OgDescription, o.OgSiteName, o.NextCrawl, o.CrawlInterval, o.IntervalDelta, o.Assigned, o.Hash.String())
+	ormSite, err := SiteByUrlOrCreateEmpty(p.Url)
 	if err != nil {
-		return fmt.Errorf("unable to save page '%v': %w", o, err)
+		return fmt.Errorf("failed to get site with url '%s' or create empty: %w", p.Url.String(), err)
 	}
 
-	if updateLinks {
-		err = o.updateLinks()
-		if err != nil {
-			return fmt.Errorf("unable to save page links '%v': %w", o, err)
-		}
+	_, err = dbpool.Exec(context.Background(),
+		query,
+		pgx.NamedArgs{
+			"id":             p.id,
+			"site":           ormSite.id,
+			"path":           p.Url.PathString(),
+			"title":          p.Title,
+			"og_title":       p.OgTitle,
+			"og_description": p.OgDescription,
+			"og_sitename":    p.OgSiteName,
+			"hash":           p.Hash.String(),
+			"next_crawl":     p.NextCrawl,
+			"crawl_interval": p.CrawlInterval,
+			"interval_delta": p.IntervalDelta,
+			"assigned":       p.Assigned,
+		})
+	if err != nil {
+		return fmt.Errorf("failed to execute query: %w", err)
+	}
+
+	err = p.saveLinks()
+	if err != nil {
+		return fmt.Errorf("unable to save links: %w", err)
 	}
 
 	return nil
 }
 
-func pageFromRow(row pgx.Row, loadLinks bool) (OrmPage, error) {
-	var p OrmPage
+func PageFromQuery(query string, args ...interface{}) (OrmPage, error) {
+	var ormPage OrmPage
 	var path string
 	var hashS string
 
-	err := row.Scan(&p.id, &p.siteId, &path, &p.Title, &p.OgTitle, &p.OgDescription, &p.OgSiteName, &p.NextCrawl, &p.CrawlInterval, &p.IntervalDelta, &p.Assigned, &hashS)
-
+	row := dbpool.QueryRow(context.Background(), query, args...)
+	err := row.Scan(&ormPage.id, &ormPage.siteId, &path, &ormPage.Title, &ormPage.OgTitle, &ormPage.OgDescription, &ormPage.OgSiteName, &hashS, &ormPage.NextCrawl, &ormPage.CrawlInterval, &ormPage.IntervalDelta, &ormPage.Assigned)
 	if err != nil {
-		return p, err
+		return ormPage, fmt.Errorf("failed to scan results from query '%s': %w", query, err)
 	}
 
-	p.Hash, err = hash.StrToHash(hashS)
-
+	ormPage.Hash, err = hash.StrToHash(hashS)
 	if err != nil {
-		return p, err
+		return ormPage, fmt.Errorf("failed to set page hash to '%s': %w", hashS, err)
 	}
 
-	// Get Url
-	site, err := SiteByID(p.siteId)
-
+	ormSite, err := SiteByID(ormPage.siteId)
 	if err != nil {
-		return p, err
+		return ormPage, fmt.Errorf("failed to get site with id '%d': %w", ormPage.siteId, err)
 	}
 
-	u, err := url.ParseAbs(site.Url.String() + path)
-
+	urlS := ormSite.Url.StringNoPath() + path
+	u, err := url.ParseAbs(urlS)
 	if err != nil {
-		return p, err
+		return ormPage, fmt.Errorf("failed to parse url '%s'", urlS)
 	}
 
-	p.Url = u
+	ormPage.Url = u
 
-	if loadLinks {
-		// Get Links
-		dsts, err := LinkDstsBySrc(p.Url.String())
-		if err != nil {
-			return p, err
-		}
-		p.Links = dsts
-	}
-	return p, nil
+	return ormPage, nil
 }
 
-func PageByID(id int, loadLinks bool) (OrmPage, error) {
-	query := `SELECT id, site, path, title, og_title, og_description, og_sitename, next_crawl, crawl_interval, interval_delta, assigned, hash
+func PageByID(id int) (OrmPage, error) {
+	query := `SELECT *
 		FROM page
 		WHERE page.id = $1;`
 
-	row := dbpool.QueryRow(context.Background(), query, id)
-	p, err := pageFromRow(row, loadLinks)
-
+	p, err := PageFromQuery(query, id)
 	if err != nil {
-		return p, fmt.Errorf("unable to get page from database for id '%d': %w", id, err)
+		return p, fmt.Errorf("failed to get page from query: %w", err)
 	}
 
 	return p, nil
-
 }
 
-func PageByUrl(urlS string, loadLinks bool) (OrmPage, error) {
-	query := `SELECT id, site, path, title, og_title, og_description, og_sitename, next_crawl, crawl_interval, interval_delta, assigned, hash
-		FROM page
-		WHERE page.site = $1 AND page.path = $2;`
+func PageByUrl(u url.Url) (OrmPage, error) {
+	query := `SELECT page.*
+                FROM page
+                LEFT JOIN site ON site.id = page.site
+                WHERE site.url = $1 AND page.path = $2;`
 
-	u, err := url.ParseAbs(urlS)
+	p, err := PageFromQuery(query, u.StringNoPath(), u.PathString())
 	if err != nil {
-		return OrmPage{}, fmt.Errorf("unable to get page from database for url '%s': %w", urlS, err)
-	}
-
-	s, err := SiteByUrl(u.StringNoPath())
-	if err != nil {
-		return OrmPage{}, fmt.Errorf("unable to get page from database for url '%s': %w", urlS, err)
-	}
-
-	row := dbpool.QueryRow(context.Background(), query, s.id, u.PathString())
-	p, err := pageFromRow(row, loadLinks)
-
-	if err != nil {
-		return p, fmt.Errorf("unable to get page from database for url '%s': %w", urlS, err)
+		return p, fmt.Errorf("unable to get page from query: %w", err)
 	}
 
 	return p, nil
-
 }
