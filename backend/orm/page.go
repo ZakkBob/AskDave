@@ -125,6 +125,7 @@ func (p *OrmPage) loadLinks() error {
 	if err != nil {
 		return fmt.Errorf("failed to query: %w", err)
 	}
+	defer rows.Close()
 
 	var dstS string
 	var dst url.Url

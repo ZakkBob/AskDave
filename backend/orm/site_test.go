@@ -20,6 +20,8 @@ func compareCreatedAndRetrievedSites(t *testing.T, createdSite *orm.OrmSite, ret
 }
 
 func TestCreateSite_And_SiteByUrl_And_SiteByID(t *testing.T) {
+	defer resetDB(t)
+
 	siteTests := []struct {
 		name string
 		in   string
@@ -64,7 +66,9 @@ func TestCreateSite_And_SiteByUrl_And_SiteByID(t *testing.T) {
 }
 
 func TestSiteSave(t *testing.T) {
-	u := uniqueURL(t)
+	defer resetDB(t)
+
+	u := makeURL(t, "")
 	v := robots.UrlValidator{}
 	now := time.Now()
 
@@ -96,7 +100,9 @@ func TestSiteSave(t *testing.T) {
 }
 
 func TestCreateEmptySite(t *testing.T) {
-	u := uniqueURL(t)
+	defer resetDB(t)
+
+	u := makeURL(t, "")
 
 	defaultTime, err := time.Parse("2006-01-02", "0000-01-01")
 	require.NoError(t, err, "Parse should not return an error")
@@ -112,8 +118,10 @@ func TestCreateEmptySite(t *testing.T) {
 }
 
 func TestSiteByUrlOrCreateEmpty(t *testing.T) {
+	defer resetDB(t)
+
 	t.Run("Exists", func(t *testing.T) {
-		u := uniqueURL(t)
+		u := makeURL(t, "")
 		v, err := robots.FromStrings([]string{"test"}, []string{"testing"})
 		require.NoError(t, err, "FromStrings should not return an error")
 
@@ -129,7 +137,7 @@ func TestSiteByUrlOrCreateEmpty(t *testing.T) {
 	})
 
 	t.Run("NotExists", func(t *testing.T) {
-		u := uniqueURL(t)
+		u := makeURL(t, "")
 
 		defaultTime, err := time.Parse("2006-01-02", "0000-01-01")
 		require.NoError(t, err, "Parse should not return an error")

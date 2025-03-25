@@ -65,7 +65,9 @@ func compareCreatedAndRetrievedPages(t *testing.T, expected *orm.OrmPage, actual
 }
 
 func TestCreatePage_And_PageByUrl_And_PageByID(t *testing.T) {
-	u := uniqueURL(t)
+	defer resetDB(t)
+
+	u := makeURL(t, "")
 
 	dsts, err := url.ParseMany([]string{"https://www.testcreatepageandbyurlbyidlink1.com/path/e", "https://www.testcreatepageandbyurlbyidlink2.com"})
 	assert.NoError(t, err, "ParseMany should not return an error")
@@ -115,7 +117,9 @@ func TestCreatePage_And_PageByUrl_And_PageByID(t *testing.T) {
 }
 
 func TestPageSave(t *testing.T) {
-	u := uniqueURL(t)
+	defer resetDB(t)
+
+	u := makeURL(t, "")
 	p := page.Page{
 		Url:           u,
 		Title:         "title",
@@ -169,7 +173,9 @@ func TestPageSave(t *testing.T) {
 }
 
 func TestCreateEmptyPage(t *testing.T) {
-	u := uniqueURL(t)
+	defer resetDB(t)
+
+	u := makeURL(t, "")
 
 	createdPage, err := orm.CreateEmptyPage(u)
 	require.NoError(t, err, "CreateEmptyPage should not return an error")
@@ -178,8 +184,10 @@ func TestCreateEmptyPage(t *testing.T) {
 }
 
 func TestPageByUrlOrCreateEmpty(t *testing.T) {
+	defer resetDB(t)
+
 	t.Run("Exists", func(t *testing.T) {
-		u := uniqueURL(t)
+		u := makeURL(t, "")
 
 		createdPage, err := orm.CreateEmptyPage(u)
 		require.NoError(t, err, "CreateEmptyPage should not return an error")
@@ -191,7 +199,7 @@ func TestPageByUrlOrCreateEmpty(t *testing.T) {
 	})
 
 	t.Run("NotExists", func(t *testing.T) {
-		u := uniqueURL(t)
+		u := makeURL(t, "")
 
 		createdPage, err := orm.PageByUrlOrCreateEmpty(u)
 		require.NoError(t, err, "SiteByUrlOrCreateEmpty should not return an error")
