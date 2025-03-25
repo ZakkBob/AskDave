@@ -116,7 +116,7 @@ func (f *FileFetcher) Fetch(s string) (Response, error) {
 
 	u, err := url.ParseAbs(s)
 	if err != nil {
-		return Response{}, fmt.Errorf("fetching file: %v", err)
+		return Response{}, fmt.Errorf("fetching file: %w", err)
 	}
 
 	path := "testsites/"

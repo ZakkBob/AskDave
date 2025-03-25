@@ -24,7 +24,7 @@ func (validator *UrlValidator) ValidateUrl(u *url.Url) bool {
 }
 
 func (validator *UrlValidator) AllowedStrings() []string {
-	var allowed []string
+	allowed := make([]string, 0)
 	for _, regex := range validator.AllowedPatterns {
 		allowed = append(allowed, regex.String())
 	}
@@ -32,7 +32,7 @@ func (validator *UrlValidator) AllowedStrings() []string {
 }
 
 func (validator *UrlValidator) DisallowedStrings() []string {
-	var disallowed []string
+	disallowed := make([]string, 0)
 	for _, regex := range validator.DisallowedPatterns {
 		disallowed = append(disallowed, regex.String())
 	}
