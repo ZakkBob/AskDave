@@ -38,16 +38,16 @@ CREATE TABLE page (
 
 CREATE TYPE failure_reason AS ENUM ('NoFailure', 'RobotsDisallowed', 'FetchFailed');
 
-CREATE TABLE crawl (
-  id SERIAL PRIMARY KEY NOT NULL,
-  page integer references page(id) NOT NULL,
+-- CREATE TABLE crawl (
+--   id SERIAL PRIMARY KEY NOT NULL,
+--   page integer references page(id) NOT NULL,
   
-  datetime timestamp NOT NULL,
-  success bool NOT NULL,
-  failure_reason int NOT NULL,
-  content_changed bool NOT NULL,
-  hash char(32) NOT NULL
-);
+--   datetime timestamp NOT NULL,
+--   success bool NOT NULL,
+--   failure_reason int NOT NULL,
+--   content_changed bool NOT NULL,
+--   hash char(32) NOT NULL
+-- );
 
 CREATE TABLE link (
   id SERIAL PRIMARY KEY NOT NULL,

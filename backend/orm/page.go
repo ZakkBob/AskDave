@@ -9,7 +9,6 @@ import (
 
 	"github.com/ZakkBob/AskDave/gocommon/hash"
 	"github.com/ZakkBob/AskDave/gocommon/page"
-	"github.com/ZakkBob/AskDave/gocommon/tasks"
 	"github.com/ZakkBob/AskDave/gocommon/url"
 
 	"github.com/jackc/pgx/v5"
@@ -42,17 +41,17 @@ func (p *OrmPage) Site() (OrmSite, error) {
 	return s, err
 }
 
-func (p *OrmPage) SaveCrawl(datetime time.Time, success bool, failureReason tasks.FailureReason, contentChanged bool, hash hash.Hash) error {
-	query := `INSERT INTO crawl (page, datetime, success, failure_reason, content_changed, hash
-		VALUES ($1, $2, $3, $4, $5, $6);`
+// func (p *OrmPage) SaveCrawl(datetime time.Time, success bool, failureReason tasks.FailureReason, contentChanged bool, hash hash.Hash) error {
+// 	query := `INSERT INTO crawl (page, datetime, success, failure_reason, content_changed, hash
+// 		VALUES ($1, $2, $3, $4, $5, $6);`
 
-	_, err := dbpool.Exec(context.Background(), query, p.id, datetime, success, failureReason, contentChanged, hash.String())
-	if err != nil {
-		return fmt.Errorf("unable to save crawl '%v' '%v' '%v' '%v' '%v': %w", datetime, success, failureReason, contentChanged, hash, err)
-	}
+// 	_, err := dbpool.Exec(context.Background(), query, p.id, datetime, success, failureReason, contentChanged, hash.String())
+// 	if err != nil {
+// 		return fmt.Errorf("unable to save crawl '%v' '%v' '%v' '%v' '%v': %w", datetime, success, failureReason, contentChanged, hash, err)
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
 func (p *OrmPage) deleteLinksFrom() error {
 	query := `DELETE
