@@ -12,6 +12,25 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func assertPageEmpty(t *testing.T, u url.Url, p orm.OrmPage) {
+	comparePageData(t, &page.Page{
+		Url:           u,
+		Title:         "",
+		OgTitle:       "",
+		OgDescription: "",
+		OgSiteName:    "",
+		Links:         []url.Url{},
+		Hash:          hash.Hashs(""),
+	}, &p.Page)
+
+	now := time.Now()
+
+	assert.WithinDuration(t, time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.UTC().Location()), p.NextCrawl, time.Second, "OrmPage's next crawl should be reasonably close to expected")
+	assert.Equal(t, 7, p.CrawlInterval, "OrmPage should have the default crawl interval")
+	assert.Equal(t, 0, p.IntervalDelta, "OrmPage should have the default interval delta")
+	assert.Equal(t, false, p.Assigned, "OrmPage should have the default assigned value")
+}
+
 func comparePageData(t *testing.T, expected *page.Page, actual *page.Page) {
 	assert.Equal(t, expected.Url.String(), actual.Url.String(), "Page data should have correct URL")
 	assert.Equal(t, expected.Title, actual.Title, "Page data should have correct Title")
@@ -19,7 +38,18 @@ func comparePageData(t *testing.T, expected *page.Page, actual *page.Page) {
 	assert.Equal(t, expected.OgDescription, actual.OgDescription, "Page data should have correct OgDescription")
 	assert.Equal(t, expected.OgSiteName, actual.OgSiteName, "Page data should have correct OgSiteName")
 	assert.Equal(t, expected.Hash.String(), actual.Hash.String(), "Page data should have correct Hash string")
-	assert.Equal(t, expected.Links, actual.Links, "Page data should have correct links")
+
+	var expectedDstStrings []string
+	var actualDstStrings []string
+
+	for _, dst := range expected.Links {
+		expectedDstStrings = append(expectedDstStrings, dst.String())
+	}
+	for _, dst := range actual.Links {
+		actualDstStrings = append(actualDstStrings, dst.String())
+	}
+
+	assert.Equal(t, expectedDstStrings, actualDstStrings, "Page data should have correct links")
 }
 
 func compareCreatedAndRetrievedPages(t *testing.T, expected *orm.OrmPage, actual *orm.OrmPage) {
@@ -36,6 +66,10 @@ func compareCreatedAndRetrievedPages(t *testing.T, expected *orm.OrmPage, actual
 
 func TestCreatePage_And_PageByUrl_And_PageByID(t *testing.T) {
 	u := uniqueURL(t)
+
+	dsts, err := url.ParseMany([]string{"https://www.testcreatepageandbyurlbyidlink1.com/path/e", "https://www.testcreatepageandbyurlbyidlink2.com"})
+	assert.NoError(t, err, "ParseMany should not return an error")
+
 	p := page.Page{
 		Url:           u,
 		Title:         "title",
@@ -43,6 +77,7 @@ func TestCreatePage_And_PageByUrl_And_PageByID(t *testing.T) {
 		OgDescription: "og description",
 		OgSiteName:    "og site name",
 		Hash:          hash.Hashs("hashed"),
+		Links:         dsts,
 	}
 
 	now := time.Now()
@@ -133,52 +168,37 @@ func TestPageSave(t *testing.T) {
 
 }
 
-// func TestCreateEmptySite(t *testing.T) {
-// 	u := uniqueURL(t)
+func TestCreateEmptyPage(t *testing.T) {
+	u := uniqueURL(t)
 
-// 	defaultTime, err := time.Parse("2006-01-02", "0000-01-01")
-// 	require.NoError(t, err, "Parse should not return an error")
+	createdPage, err := orm.CreateEmptyPage(u)
+	require.NoError(t, err, "CreateEmptyPage should not return an error")
 
-// 	createdSite, err := orm.CreateEmptySite(u)
-// 	require.NoError(t, err, "CreateEmptySite should not return an error")
+	assertPageEmpty(t, u, createdPage)
+}
 
-// 	assert.NotZero(t, createdSite.ID(), "Returned OrmSite should have a non-zero ID")
-// 	assert.Equal(t, u.String(), createdSite.Url.String(), "Returned OrmSite should have the correct URL")
-// 	assert.Equal(t, []string{}, createdSite.Validator.AllowedStrings(), "Retrieved site should have the correct allowed strings")
-// 	assert.Equal(t, []string{}, createdSite.Validator.DisallowedStrings(), "Retrieved site should have the correct disallowed strings")
-// 	assert.WithinDuration(t, defaultTime, createdSite.LastRobotsCrawl, time.Second, "Timestamps should be reasonably close")
-// }
+func TestPageByUrlOrCreateEmpty(t *testing.T) {
+	t.Run("Exists", func(t *testing.T) {
+		u := uniqueURL(t)
 
-// func TestSiteByUrlOrCreateEmpty(t *testing.T) {
-// 	t.Run("Exists", func(t *testing.T) {
-// 		u := uniqueURL(t)
-// 		v, err := robots.FromStrings([]string{"test"}, []string{"testing"})
-// 		require.NoError(t, err, "FromStrings should not return an error")
+		createdPage, err := orm.CreateEmptyPage(u)
+		require.NoError(t, err, "CreateEmptyPage should not return an error")
 
-// 		now := time.Now()
+		retrievedPage, err := orm.PageByUrlOrCreateEmpty(u)
+		require.NoError(t, err, "SiteByUrlOrCreateEmpty should not return an error")
 
-// 		createdSite, err := orm.CreateSite(u, *v, now)
-// 		require.NoError(t, err, "CreateSite should not return an error")
+		compareCreatedAndRetrievedPages(t, &createdPage, &retrievedPage)
+	})
 
-// 		retrievedSite, err := orm.SiteByUrlOrCreateEmpty(u)
-// 		require.NoError(t, err, "SiteByUrlOrCreateEmpty should not return an error")
+	t.Run("NotExists", func(t *testing.T) {
+		u := uniqueURL(t)
 
-// 		compareCreatedAndRetrievedSites(t, &createdSite, &retrievedSite)
-// 	})
+		createdPage, err := orm.PageByUrlOrCreateEmpty(u)
+		require.NoError(t, err, "SiteByUrlOrCreateEmpty should not return an error")
 
-// 	t.Run("NotExists", func(t *testing.T) {
-// 		u := uniqueURL(t)
+		assert.NotZero(t, createdPage.ID(), "Returned OrmPage should have a non-zero ID")
+		assert.NotZero(t, createdPage.SiteID(), "Returned OrmPage should have a non-zero Site ID")
 
-// 		defaultTime, err := time.Parse("2006-01-02", "0000-01-01")
-// 		require.NoError(t, err, "Parse should not return an error")
-
-// 		createdSite, err := orm.SiteByUrlOrCreateEmpty(u)
-// 		require.NoError(t, err, "SiteByUrlOrCreateEmpty should not return an error")
-
-// 		assert.NotZero(t, createdSite.ID(), "Returned OrmSite should have a non-zero ID")
-// 		assert.Equal(t, u.String(), createdSite.Url.String(), "Returned OrmSite should have the correct URL")
-// 		assert.Equal(t, []string{}, createdSite.Validator.AllowedStrings(), "Retrieved site should have the correct allowed strings")
-// 		assert.Equal(t, []string{}, createdSite.Validator.DisallowedStrings(), "Retrieved site should have the correct disallowed strings")
-// 		assert.WithinDuration(t, defaultTime, createdSite.LastRobotsCrawl, time.Second, "Timestamps should be reasonably close")
-// 	})
-// }
+		assertPageEmpty(t, u, createdPage)
+	})
+}

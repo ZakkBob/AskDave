@@ -54,21 +54,21 @@ func (p *OrmPage) SaveCrawl(datetime time.Time, success bool, failureReason task
 	return nil
 }
 
-func (o *OrmPage) deleteLinksFrom() error {
+func (p *OrmPage) deleteLinksFrom() error {
 	query := `DELETE
 				FROM link
 				WHERE src = $1;`
 
-	_, err := dbpool.Exec(context.Background(), query, o.id)
+	_, err := dbpool.Exec(context.Background(), query, p.id)
 	if err != nil {
-		return fmt.Errorf("failed to execute query '%s' with arg '%d'", query, o.id)
+		return fmt.Errorf("failed to execute query '%s' with arg '%d'", query, p.id)
 	}
 	return nil
 }
 
 // inefficient probably
-func (o *OrmPage) saveLinks() error {
-	err := o.deleteLinksFrom()
+func (p *OrmPage) saveLinks() error {
+	err := p.deleteLinksFrom()
 	if err != nil {
 		return fmt.Errorf("failed to delete links from page: %w", err)
 	}
@@ -81,7 +81,7 @@ func (o *OrmPage) saveLinks() error {
 	var dstID int
 	var dstIDs []int
 
-	for _, dst := range o.Links {
+	for _, dst := range p.Links {
 		row := dbpool.QueryRow(context.Background(), query, dst.StringNoPath(), dst.PathString())
 		err := row.Scan(&dstID)
 
@@ -104,7 +104,7 @@ func (o *OrmPage) saveLinks() error {
 		pgx.Identifier{"link"},
 		[]string{"src", "dst"},
 		pgx.CopyFromSlice(len(dstIDs), func(i int) ([]any, error) {
-			return []any{o.id, dstIDs[i]}, nil
+			return []any{p.id, dstIDs[i]}, nil
 		}),
 	)
 	if err != nil {
@@ -113,10 +113,41 @@ func (o *OrmPage) saveLinks() error {
 	return nil
 }
 
+func (p *OrmPage) loadLinks() error {
+	query := `SELECT concat(site.url, page.path) AS dst 
+		FROM link 
+		LEFT JOIN page 
+		ON page.id = link.dst 
+		LEFT JOIN site 
+		ON site.id = page.site 
+		WHERE src = $1;`
+
+	rows, err := dbpool.Query(context.Background(), query, p.id)
+	if err != nil {
+		return fmt.Errorf("failed to query: %w", err)
+	}
+
+	var dstS string
+	var dst url.Url
+
+	for rows.Next() {
+		err := rows.Scan(&dstS)
+		if err != nil {
+			return fmt.Errorf("failed to scan row: %w", err)
+		}
+		dst, err = url.ParseAbs(dstS)
+		if err != nil {
+			return fmt.Errorf("failed to parse dst: %w", err)
+		}
+		p.Links = append(p.Links, dst)
+	}
+	return nil
+}
+
 func CreatePage(p page.Page, nextCrawl time.Time, crawlInterval int, intervalDelta int, assigned bool) (OrmPage, error) {
 	query := `INSERT INTO page (site, path, title, og_title, og_description, og_sitename, hash, next_crawl, crawl_interval, interval_delta, assigned)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-		RETURNING id;`
+		RETURNING id, next_crawl;`
 
 	s, err := SiteByUrlOrCreateEmpty(p.Url)
 	if err != nil {
@@ -133,12 +164,15 @@ func CreatePage(p page.Page, nextCrawl time.Time, crawlInterval int, intervalDel
 	}
 
 	row := dbpool.QueryRow(context.Background(), query, ormPage.siteId, ormPage.Url.PathString(), ormPage.Title, ormPage.OgTitle, ormPage.OgDescription, ormPage.OgSiteName, ormPage.Hash.String(), ormPage.NextCrawl, ormPage.CrawlInterval, ormPage.IntervalDelta, ormPage.Assigned)
-	err = row.Scan(&ormPage.id)
+	err = row.Scan(&ormPage.id, &ormPage.NextCrawl)
 	if err != nil {
 		return ormPage, fmt.Errorf("failed to scan query results: %w", err)
 	}
 
-	ormPage.saveLinks()
+	err = ormPage.saveLinks()
+	if err != nil {
+		return ormPage, fmt.Errorf("could not save page links: %w", err)
+	}
 
 	return ormPage, nil
 }
@@ -229,6 +263,8 @@ func PageFromQuery(query string, args ...interface{}) (OrmPage, error) {
 
 	ormPage.Url = u
 
+	ormPage.loadLinks()
+
 	return ormPage, nil
 }
 
@@ -257,4 +293,20 @@ func PageByUrl(u url.Url) (OrmPage, error) {
 	}
 
 	return p, nil
+}
+
+func PageByUrlOrCreateEmpty(u url.Url) (OrmPage, error) {
+	s, err := PageByUrl(u)
+
+	if err == nil {
+		return s, nil
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return s, fmt.Errorf("failed to get page with url '%s': %w", u.String(), err)
+	}
+
+	s, err = CreateEmptyPage(u)
+	if err != nil {
+		return s, fmt.Errorf("failed to create empty page: %w", err)
+	}
+	return s, nil
 }

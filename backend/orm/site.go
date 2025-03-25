@@ -37,6 +37,11 @@ func (o *OrmSite) Save() error {
 
 func CreateSite(u url.Url, validator robots.UrlValidator, lastRobotsCrawl time.Time) (OrmSite, error) {
 	var s OrmSite
+	u, err := url.ParseAbs(u.StringNoPath())
+	if err != nil {
+		return s, fmt.Errorf("failed to parse url without path: %w", err)
+	}
+
 	s.Url = u
 	s.Validator = validator
 	s.LastRobotsCrawl = lastRobotsCrawl
@@ -45,8 +50,8 @@ func CreateSite(u url.Url, validator robots.UrlValidator, lastRobotsCrawl time.T
 				VALUES ($1, $2, $3, $4)
 				RETURNING id;`
 
-	row := dbpool.QueryRow(context.Background(), query, u.String(), validator.AllowedStrings(), validator.DisallowedStrings(), lastRobotsCrawl)
-	err := row.Scan(&s.id)
+	row := dbpool.QueryRow(context.Background(), query, u.StringNoPath(), validator.AllowedStrings(), validator.DisallowedStrings(), lastRobotsCrawl)
+	err = row.Scan(&s.id)
 	if err != nil {
 		return s, fmt.Errorf("failed to scan query results': %w", err)
 	}
@@ -137,7 +142,7 @@ func SiteByUrl(u url.Url) (OrmSite, error) {
 				FROM site
 				WHERE url = $1;`
 
-	s, err := SiteFromQuery(query, u.String())
+	s, err := SiteFromQuery(query, u.StringNoPath())
 	if err != nil {
 		return s, fmt.Errorf("failed to get site with query '%s': %w", query, err)
 	}

@@ -20,32 +20,47 @@ func compareCreatedAndRetrievedSites(t *testing.T, createdSite *orm.OrmSite, ret
 }
 
 func TestCreateSite_And_SiteByUrl_And_SiteByID(t *testing.T) {
-	u := uniqueURL(t)
-	v := robots.UrlValidator{}
-	now := time.Now()
+	siteTests := []struct {
+		name string
+		in   string
+		out  string
+	}{
+		{"nopath", "https://testcreatesite_and_sitebyurl_and_sitebyid.com", "https://testcreatesite_and_sitebyurl_and_sitebyid.com"},
+		{"withpath", "https://testcreatesite_and_sitebyurl_and_sitebyid2.com/path/1", "https://testcreatesite_and_sitebyurl_and_sitebyid2.com"},
+	}
 
-	createdSite, err := orm.CreateSite(u, v, now)
-	require.NoError(t, err, "CreateSite should not return an error")
+	for _, tt := range siteTests {
+		t.Run(tt.name, func(t *testing.T) {
+			u, err := url.ParseAbs(tt.in)
+			require.NoError(t, err, "ParseAbs should not return an error")
 
-	assert.NotZero(t, createdSite.ID(), "Returned OrmSite should have a non-zero ID")
-	assert.Equal(t, u.String(), createdSite.Url.String(), "Returned OrmSite should have the correct URL")
-	assert.Equal(t, v.AllowedStrings(), createdSite.Validator.AllowedStrings(), "Retrieved site should have the correct allowed strings")
-	assert.Equal(t, v.DisallowedStrings(), createdSite.Validator.DisallowedStrings(), "Retrieved site should have the correct disallowed strings")
-	assert.WithinDuration(t, now, createdSite.LastRobotsCrawl, time.Second, "Timestamps should be reasonably close")
+			v := robots.UrlValidator{}
+			now := time.Now()
 
-	t.Run("SiteByUrl", func(t *testing.T) {
-		retrievedSite, err := orm.SiteByUrl(u)
-		require.NoError(t, err, "SiteByUrl should not return an error")
+			createdSite, err := orm.CreateSite(u, v, now)
+			require.NoError(t, err, "CreateSite should not return an error")
 
-		compareCreatedAndRetrievedSites(t, &createdSite, &retrievedSite)
-	})
+			assert.NotZero(t, createdSite.ID(), "Returned OrmSite should have a non-zero ID")
+			assert.Equal(t, tt.out, createdSite.Url.String(), "Returned OrmSite should have the correct URL")
+			assert.Equal(t, v.AllowedStrings(), createdSite.Validator.AllowedStrings(), "Retrieved site should have the correct allowed strings")
+			assert.Equal(t, v.DisallowedStrings(), createdSite.Validator.DisallowedStrings(), "Retrieved site should have the correct disallowed strings")
+			assert.WithinDuration(t, now, createdSite.LastRobotsCrawl, time.Second, "Timestamps should be reasonably close")
 
-	t.Run("SiteByID", func(t *testing.T) {
-		retrievedSite, err := orm.SiteByID(createdSite.ID())
-		require.NoError(t, err, "SiteByID should not return an error")
+			t.Run("SiteByUrl", func(t *testing.T) {
+				retrievedSite, err := orm.SiteByUrl(u)
+				require.NoError(t, err, "SiteByUrl should not return an error")
 
-		compareCreatedAndRetrievedSites(t, &createdSite, &retrievedSite)
-	})
+				compareCreatedAndRetrievedSites(t, &createdSite, &retrievedSite)
+			})
+
+			t.Run("SiteByID", func(t *testing.T) {
+				retrievedSite, err := orm.SiteByID(createdSite.ID())
+				require.NoError(t, err, "SiteByID should not return an error")
+
+				compareCreatedAndRetrievedSites(t, &createdSite, &retrievedSite)
+			})
+		})
+	}
 }
 
 func TestSiteSave(t *testing.T) {
