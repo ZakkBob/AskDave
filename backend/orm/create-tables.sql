@@ -1,9 +1,8 @@
-DROP TABLE IF EXISTS crawl;
+-- DROP TABLE IF EXISTS crawl;
 DROP TABLE IF EXISTS link;
 DROP TABLE IF EXISTS page;
-DROP TABLE IF EXISTS robots;
 DROP TABLE IF EXISTS site;
-DROP TYPE IF EXISTS failure_reason;
+-- DROP TYPE IF EXISTS failure_reason;
 
 CREATE TABLE site (
   id SERIAL PRIMARY KEY NOT NULL,
@@ -25,7 +24,7 @@ CREATE TABLE page (
   og_description varchar(100) DEFAULT '' NOT NULL,
   og_sitename varchar(50) DEFAULT '' NOT NULL,
 
-  hash char(32) NOT NULL,
+  hash char(32) DEFAULT 'd41d8cd98f00b204e9800998ecf8427e' NOT NULL, --empty hash
 
   next_crawl date NOT NULL,
   crawl_interval integer DEFAULT 7 CHECK(crawl_interval > 0),
@@ -36,7 +35,7 @@ CREATE TABLE page (
   UNIQUE (site, path)
 );
 
-CREATE TYPE failure_reason AS ENUM ('NoFailure', 'RobotsDisallowed', 'FetchFailed');
+-- CREATE TYPE failure_reason AS ENUM ('NoFailure', 'RobotsDisallowed', 'FetchFailed');
 
 -- CREATE TABLE crawl (
 --   id SERIAL PRIMARY KEY NOT NULL,
